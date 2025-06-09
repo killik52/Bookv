@@ -1,4 +1,3 @@
-// app/src/main/java/com/example/myapplication/ClienteViewModel.kt
 package com.example.myapplication
 
 import android.app.Application
@@ -7,11 +6,9 @@ import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.data.AppDatabase
-import com.example.myapplication.data.dao.FaturaDao
 import com.example.myapplication.data.model.Cliente
 import com.example.myapplication.data.model.ClienteBloqueado
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first // Importar first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -50,12 +47,16 @@ class ClienteViewModel(application: Application) : AndroidViewModel(application)
             if (it.trim().isNotEmpty()) todosSeriais.add(it.trim())
         }
 
-        // Busca as faturas com detalhes para acessar os itens
-        val faturasWithDetails = faturaDao.getFaturasWithDetailsByClienteNome(cliente.nome!!).first() // Usar .first() para obter o valor mais recente
-        faturasWithDetails.forEach { faturaDetails ->
-            faturaDetails.artigos.forEach { artigoItem -> // Acessa diretamente a lista de FaturaItem
-                artigoItem.numeroSerial?.split(',')?.forEach { serial ->
-                    if (serial.trim().isNotEmpty()) todosSeriais.add(serial.trim())
+        // Busca a lista de faturas uma única vez para otimizar
+        val faturas = faturaDao.getFaturasPorClienteNome(cliente.nome!!)
+        faturas.forEach { fatura ->
+            fatura.artigos?.split('|')?.forEach { artigoData ->
+                val parts = artigoData.split(',')
+                if (parts.size >= 5) {
+                    val serial = parts[4].takeIf { it.isNotBlank() && it.lowercase() != "null" }
+                    serial?.split(',')?.forEach { s ->
+                        if (s.trim().isNotEmpty()) todosSeriais.add(s.trim())
+                    }
                 }
             }
         }

@@ -1,4 +1,3 @@
-// app/src/main/java/data/dao/OutrosDao.kt
 package com.example.myapplication.data.dao
 
 import androidx.room.*
@@ -10,14 +9,14 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface FaturaLixeiraDao {
-    // Query corrigida para usar o nome da tabela 'fatura_lixeira' (singular).
-    @Query("SELECT * FROM fatura_lixeira ORDER BY data_delecao DESC")
+    // Query corrigida para usar uma coluna que existe.
+    @Query("SELECT * FROM faturas_lixeira ORDER BY data_delecao DESC")
     fun getAll(): Flow<List<FaturaLixeira>>
 
     @Insert
     suspend fun insert(faturaLixeira: FaturaLixeira)
 
-    @Query("DELETE FROM fatura_lixeira WHERE id = :id")
+    @Query("DELETE FROM faturas_lixeira WHERE id = :id")
     suspend fun deleteById(id: Long)
 }
 

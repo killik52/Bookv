@@ -1,132 +1,89 @@
-// app/src/main/java/com/example/myapplication/MainActivityViewModel.kt
 package com.example.myapplication
 
 import android.app.Application
-import androidx.lifecycle.AndroidViewModel
-import androidx.lifecycle.LiveData
-import androidx.lifecycle.MutableLiveData
-import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.*
 import com.example.myapplication.data.AppDatabase
-import com.example.myapplication.data.dao.ArtigoDao
-import com.example.myapplication.data.dao.ClienteDao
-import com.example.myapplication.data.dao.FaturaDao
-import com.example.myapplication.data.model.Cliente
 import com.example.myapplication.data.model.Fatura
-import com.example.myapplication.data.model.FaturaResumidaItem
-import com.example.myapplication.data.model.FaturaWithDetails
+import com.example.myapplication.data.model.FaturaLixeira
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.*
 
 class MainActivityViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val faturaDao: FaturaDao = AppDatabase.getDatabase(application).faturaDao()
-    private val clienteDao: ClienteDao = AppDatabase.getDatabase(application).clienteDao()
-    private val artigoDao: ArtigoDao = AppDatabase.getDatabase(application).artigoDao()
+    private val faturaDao = AppDatabase.getDatabase(application).faturaDao()
+    private val lixeiraDao = AppDatabase.getDatabase(application).lixeiraDao()
 
-    private val _faturasRecentes = MutableLiveData<List<FaturaResumidaItem>>()
-    val faturasRecentes: LiveData<List<FaturaResumidaItem>> = _faturasRecentes
+    val faturas: LiveData<List<FaturaResumidaItem>> = faturaDao.getAllFaturas()
+        .map { faturas ->
+            faturas.map { converterParaFaturaResumida(it) }
+        }.asLiveData()
 
-    private val _clientesRecentes = MutableLiveData<List<Cliente>>()
-    val clientesRecentes: LiveData<List<Cliente>> = _clientesRecentes
+    // LiveData para a fatura encontrada pelo código de barras
+    private val _faturaEncontrada = MutableLiveData<Fatura?>()
+    val faturaEncontrada: LiveData<Fatura?> = _faturaEncontrada
 
-    private val _artigosMaisVendidos = MutableLiveData<List<Pair<String, Int>>>()
-    val artigosMaisVendidos: LiveData<List<Pair<String, Int>>> = _artigosMaisVendidos
-
-    private val _searchText = MutableStateFlow("")
-    val searchText: StateFlow<String> = _searchText.asStateFlow()
-
-    private val _isSearching = MutableStateFlow(false)
-    val isSearching: StateFlow<Boolean> = _isSearching.asStateFlow()
-
-    private val _searchResults = MutableStateFlow<List<FaturaResumidaItem>>(emptyList())
-    val searchResults: StateFlow<List<FaturaResumidaItem>> = _searchResults.asStateFlow()
-
-
-    init {
-        viewModelScope.launch {
-            // Carrega faturas recentes
-            faturaDao.getAllFaturasWithDetails().map { faturaWithDetailsList ->
-                faturaWithDetailsList.map { converterParaFaturaResumida(it) }
-            }.collect {
-                _faturasRecentes.postValue(it)
-            }
-        }
-        viewModelScope.launch(Dispatchers.IO) {
-            clienteDao.getRecentClients(5).collect {
-                _clientesRecentes.postValue(it)
-            }
-        }
-        viewModelScope.launch(Dispatchers.IO) {
-            // Usar o fluxo de FaturaWithDetails para agregar artigos
-            faturaDao.getAllFaturasWithDetails().collect { faturaWithDetailsList ->
-                val artigoVendas = mutableMapOf<String, Int>()
-                faturaWithDetailsList.forEach { faturaDetails ->
-                    faturaDetails.artigos.forEach { item ->
-                        artigoVendas[item.nomeArtigo] = artigoVendas.getOrDefault(item.nomeArtigo, 0) + item.quantidade
-                    }
-                }
-                _artigosMaisVendidos.postValue(artigoVendas.toList().sortedByDescending { it.second })
-            }
-        }
-
-        // Configura o fluxo de busca
-        _searchText.combine(faturaDao.getAllFaturasWithDetails()) { query, allFaturasWithDetails ->
-            if (query.isBlank()) {
-                _isSearching.value = false
-                emptyList()
-            } else {
-                _isSearching.value = true
-                val filtered = allFaturasWithDetails.filter { faturaWithDetails ->
-                    faturaWithDetails.fatura.numeroFatura?.contains(query, ignoreCase = true) == true ||
-                            faturaWithDetails.fatura.cliente?.contains(query, ignoreCase = true) == true
-                }.map { converterParaFaturaResumida(it) }
-                filtered
-            }
-        }.flatMapLatest {
-            MutableStateFlow(it) // Transforma a lista filtrada em um novo Flow
-        }.collect {
-            _searchResults.value = it
-        }
+    fun moverFaturaParaLixeira(faturaResumida: FaturaResumidaItem) = viewModelScope.launch(Dispatchers.IO) {
+        val faturaCompleta = faturaDao.getFaturaById(faturaResumida.id) ?: return@launch
+        val faturaNaLixeira = FaturaLixeira(
+            faturaOriginalId = faturaCompleta.id,
+            numeroFatura = faturaCompleta.numeroFatura,
+            cliente = faturaCompleta.cliente,
+            artigos = faturaCompleta.artigos,
+            subtotal = faturaCompleta.subtotal,
+            desconto = faturaCompleta.desconto,
+            descontoPercent = faturaCompleta.descontoPercent,
+            taxaEntrega = faturaCompleta.taxaEntrega,
+            saldoDevedor = faturaCompleta.saldoDevedor,
+            data = faturaCompleta.data,
+            notas = faturaCompleta.notas,
+            fotosImpressora = faturaCompleta.fotosImpressora,
+            dataDelecao = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
+        )
+        lixeiraDao.insert(faturaNaLixeira)
+        faturaDao.deleteFaturaById(faturaCompleta.id)
     }
 
-
-    fun updateSearchText(query: String) {
-        _searchText.value = query
+    // Função para buscar a fatura pelo ID (código de barras)
+    fun buscarFaturaPorId(id: Long) = viewModelScope.launch(Dispatchers.IO) {
+        val fatura = faturaDao.getFaturaById(id)
+        _faturaEncontrada.postValue(fatura)
     }
 
-    private fun converterParaFaturaResumida(faturaWithDetails: FaturaWithDetails): FaturaResumidaItem {
-        val fatura = faturaWithDetails.fatura
-        val totalItens = faturaWithDetails.artigos.sumOf { it.quantidade }
-        val totalFotos = faturaWithDetails.fotos.size
+    // Função para ser chamada quando a busca for concluída
+    fun onBuscaConcluida() {
+        _faturaEncontrada.value = null
+    }
+
+    private fun converterParaFaturaResumida(fatura: Fatura): FaturaResumidaItem {
         return FaturaResumidaItem(
             id = fatura.id,
-            numeroFatura = fatura.numeroFatura,
-            cliente = fatura.cliente,
-            data = fatura.data,
-            subtotal = fatura.subtotal,
-            saldoDevedor = fatura.saldoDevedor,
-            foiEnviada = fatura.foiEnviada,
-            totalItens = totalItens,
-            totalFotos = totalFotos
+            numeroFatura = fatura.numeroFatura ?: "N/A",
+            cliente = fatura.cliente ?: "N/A",
+            serialNumbers = extrairSeriais(fatura.artigos),
+            saldoDevedor = fatura.saldoDevedor ?: 0.0,
+            data = formatarData(fatura.data),
+            foiEnviada = fatura.foiEnviada == 1
         )
     }
 
-    fun getTotalClientes(): Flow<Int> {
-        return clienteDao.getTotalClientes()
+    private fun extrairSeriais(artigosString: String?): List<String?> {
+        if (artigosString.isNullOrEmpty()) return emptyList()
+        return artigosString.split("|").mapNotNull { artigoData ->
+            val parts = artigoData.split(",")
+            if (parts.size >= 5) parts[4].takeIf { it.isNotBlank() && it.lowercase(Locale.ROOT) != "null" }
+            else null
+        }
     }
 
-    fun getTotalArtigos(): Flow<Int> {
-        return artigoDao.getTotalArtigos()
-    }
-
-    fun getTotalFaturas(): Flow<Int> {
-        return faturaDao.getTotalFaturas()
+    private fun formatarData(dataDb: String?): String {
+        if (dataDb.isNullOrEmpty()) return ""
+        return try {
+            val inputFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+            val outputFormat = SimpleDateFormat("dd MMM yy", Locale("pt", "BR"))
+            inputFormat.parse(dataDb)?.let { outputFormat.format(it) } ?: dataDb
+        } catch (e: Exception) { dataDb }
     }
 }
