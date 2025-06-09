@@ -50,21 +50,24 @@ class ResumoFinanceiroViewModel(application: Application) : AndroidViewModel(app
         faturaDao.getFaturasNoPeriodo(startDate, endDate).collect { faturas ->
             val artigosMap = mutableMapOf<String, ResumoArtigoItem>()
             faturas.forEach { fatura ->
-                // Agora fatura.artigos é uma List<ArtigoItem>
-                fatura.artigos?.forEach { artigoItem ->
-                    val nomeArtigo = artigoItem.nome
-                    val quantidade = artigoItem.quantidade ?: 0
-                    val precoTotalItem = artigoItem.preco ?: 0.0 // O preço aqui é unitário, então multiplique pela quantidade
-                    val artigoId = artigoItem.id
+                fatura.artigos?.split("|")?.forEach { artigoData ->
+                    val parts = artigoData.split(",")
+                    if (parts.size >= 4) {
+                        val nomeArtigo = parts[1]
+                        val quantidade = parts[2].toIntOrNull() ?: 0
+                        val precoTotalItem = parts[3].toDoubleOrNull() ?: 0.0
+                        val artigoId = parts[0].toLongOrNull()
 
-                    if (!nomeArtigo.isNullOrEmpty() && quantidade > 0) {
-                        val itemAtual = artigosMap.getOrPut(nomeArtigo) {
-                            ResumoArtigoItem(nomeArtigo, 0, 0.0, artigoId)
+                        if (nomeArtigo.isNotEmpty() && quantidade > 0) {
+                            val itemAtual = artigosMap.getOrPut(nomeArtigo) {
+                                // CORRIGIDO: Usa o construtor correto da sua classe de dados
+                                ResumoArtigoItem(nomeArtigo, 0, 0.0, artigoId)
+                            }
+                            artigosMap[nomeArtigo] = itemAtual.copy(
+                                quantidadeTotalVendida = itemAtual.quantidadeTotalVendida + quantidade,
+                                valorTotalVendido = itemAtual.valorTotalVendido + precoTotalItem
+                            )
                         }
-                        artigosMap[nomeArtigo] = itemAtual.copy(
-                            quantidadeTotalVendida = itemAtual.quantidadeTotalVendida + quantidade,
-                            valorTotalVendido = itemAtual.valorTotalVendido + (precoTotalItem * quantidade) // Multiplique o preço unitário pela quantidade
-                        )
                     }
                 }
             }

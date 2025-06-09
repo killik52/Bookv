@@ -155,28 +155,25 @@ class SecondScreenActivity : AppCompatActivity() {
                 taxaEntrega = fatura.taxaEntrega ?: 0.0
                 faturaEnviadaSucesso = fatura.foiEnviada == 1
 
-                // Artigos já vêm como List<ArtigoItem> do ViewModel (graças ao TypeConverter)
-                artigosList.clear()
-                fatura.artigos?.let { articles ->
-                    artigosList.addAll(articles)
-                }
-                artigoAdapter.notifyDataSetChanged()
+                val artigosDaFatura = fatura.artigos?.split("|")?.mapNotNull {
+                    val parts = it.split(",")
+                    if (parts.size >= 6) ArtigoItem(parts[0].toLongOrNull() ?: 0L, parts[1], parts[2].toInt(), parts[3].toDouble(), parts[4], parts[5]) else null
+                } ?: emptyList()
 
-                // Notas já vêm como List<String> do ViewModel (graças ao TypeConverter)
-                notasList.clear()
-                fatura.notas?.let { notes ->
-                    notasList.addAll(notes)
-                }
-                notaAdapter.notifyDataSetChanged()
+                artigosList.clear()
+                artigosList.addAll(artigosDaFatura)
+                artigoAdapter.notifyDataSetChanged()
 
                 updateSubtotal()
             }
         }
 
-        // REMOVIDO: viewModel.notasDaFatura.observe (pois notas agora vêm com a fatura diretamente)
-        // Isso assume que você removeu _notasDaFatura de SecondScreenViewModel
+        viewModel.notasDaFatura.observe(this) { notas ->
+            notasList.clear()
+            notasList.addAll(notas)
+            notaAdapter.notifyDataSetChanged()
+        }
 
-        // CORREÇÃO: Observa faturaSalvaId diretamente do viewModel
         viewModel.faturaSalvaId.observe(this) { id ->
             id?.let {
                 faturaId = it
@@ -242,14 +239,14 @@ class SecondScreenActivity : AppCompatActivity() {
             id = faturaId.takeIf { it != -1L } ?: 0L,
             numeroFatura = binding.invoiceNumberTextView.text.toString(),
             cliente = nomeClienteSalvo,
-            artigos = artigosList, // CORREÇÃO: Passa a lista diretamente
-            subtotal = artigosList.sumOf { it.preco ?: 0.0 }, // Usar null-safe call aqui
+            artigos = artigosList.joinToString(separator = "|") { "${it.id},${it.nome},${it.quantidade},${it.preco},${it.numeroSerial},${it.descricao}" },
+            subtotal = artigosList.sumOf { it.preco },
             desconto = desconto,
             descontoPercent = if(isPercentDesconto) 1 else 0,
             taxaEntrega = taxaEntrega,
-            saldoDevedor = artigosList.sumOf { it.preco ?: 0.0 } - descontoValor + taxaEntrega, // Usar null-safe call aqui
+            saldoDevedor = artigosList.sumOf { it.preco } - descontoValor + taxaEntrega,
             data = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date()),
-            notas = notasList, // CORREÇÃO: Passa a lista diretamente
+            notas = notasList.joinToString("|"),
             foiEnviada = if (faturaEnviadaSucesso) 1 else 0,
             fotosImpressora = null // Obsoleto
         )
@@ -333,7 +330,7 @@ class SecondScreenActivity : AppCompatActivity() {
     }
 
     private fun updateSubtotal() {
-        val baseSubtotal = artigosList.sumOf { it.preco ?: 0.0 } // Use null-safe call here
+        val baseSubtotal = artigosList.sumOf { it.preco }
         binding.subtotalValueTextViewSecondScreen.text = decimalFormat.format(baseSubtotal)
         descontoValor = if (isPercentDesconto) (baseSubtotal * desconto) / 100.0 else desconto
         val descontoTextoExibicao = if (isPercentDesconto) "${String.format(Locale("pt", "BR"), "%.2f", desconto)}% (${decimalFormat.format(descontoValor)})" else "(${decimalFormat.format(descontoValor)})"

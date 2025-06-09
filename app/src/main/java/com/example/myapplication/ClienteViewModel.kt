@@ -50,11 +50,13 @@ class ClienteViewModel(application: Application) : AndroidViewModel(application)
         // Busca a lista de faturas uma única vez para otimizar
         val faturas = faturaDao.getFaturasPorClienteNome(cliente.nome!!)
         faturas.forEach { fatura ->
-            // Agora fatura.artigos já é uma List<ArtigoItem>, então itere sobre ela.
-            fatura.artigos?.forEach { artigoItem -> // <-- CORREÇÃO AQUI
-                val serial = artigoItem.numeroSerial?.takeIf { it.isNotBlank() && it.lowercase() != "null" }
-                serial?.split(',')?.forEach { s ->
-                    if (s.trim().isNotEmpty()) todosSeriais.add(s.trim())
+            fatura.artigos?.split('|')?.forEach { artigoData ->
+                val parts = artigoData.split(',')
+                if (parts.size >= 5) {
+                    val serial = parts[4].takeIf { it.isNotBlank() && it.lowercase() != "null" }
+                    serial?.split(',')?.forEach { s ->
+                        if (s.trim().isNotEmpty()) todosSeriais.add(s.trim())
+                    }
                 }
             }
         }

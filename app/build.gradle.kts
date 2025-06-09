@@ -18,7 +18,6 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -27,7 +26,6 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-
         }
         debug {
             applicationIdSuffix = ".debug"
@@ -40,7 +38,6 @@ android {
     }
     kotlinOptions {
         jvmTarget = "17"
-
     }
     buildFeatures {
         viewBinding = true
@@ -64,7 +61,6 @@ dependencies {
 
     // Room Database
     val room_version = "2.6.1"
-
     implementation("androidx.room:room-runtime:$room_version")
     implementation("androidx.room:room-ktx:$room_version") // Suporte a Coroutines
     ksp("androidx.room:room-compiler:$room_version")
@@ -74,9 +70,6 @@ dependencies {
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
     implementation("com.squareup.okhttp3:okhttp:4.10.0")
     debugImplementation("com.squareup.okhttp3:logging-interceptor:4.10.0")
-
-    // Adicionado: Gson para TypeConverters
-    implementation("com.google.code.gson:gson:2.10.1")
 
     // Outras dependências
     implementation("com.google.mlkit:text-recognition:16.0.0")
