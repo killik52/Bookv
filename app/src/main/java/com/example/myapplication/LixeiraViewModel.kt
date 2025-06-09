@@ -13,10 +13,10 @@ class LixeiraViewModel(application: Application) : AndroidViewModel(application)
     private val lixeiraDao = AppDatabase.getDatabase(application).lixeiraDao()
     private val faturaDao = AppDatabase.getDatabase(application).faturaDao()
 
-    val faturasNaLixeira = lixeiraDao.getFaturasNaLixeira().asLiveData()
+    // Chamada de método corrigida
+    val faturasNaLixeira = lixeiraDao.getAll().asLiveData()
 
     fun restaurarFatura(faturaLixeira: FaturaLixeira) = viewModelScope.launch(Dispatchers.IO) {
-        // Recria a fatura original
         val faturaRestaurada = Fatura(
             id = faturaLixeira.faturaOriginalId,
             numeroFatura = faturaLixeira.numeroFatura,
@@ -24,7 +24,7 @@ class LixeiraViewModel(application: Application) : AndroidViewModel(application)
             artigos = faturaLixeira.artigos,
             subtotal = faturaLixeira.subtotal,
             desconto = faturaLixeira.desconto,
-            descontoPercent = 0, // Ajustar se necessário
+            descontoPercent = faturaLixeira.descontoPercent,
             taxaEntrega = faturaLixeira.taxaEntrega,
             saldoDevedor = faturaLixeira.saldoDevedor,
             data = faturaLixeira.data,
@@ -32,13 +32,15 @@ class LixeiraViewModel(application: Application) : AndroidViewModel(application)
             foiEnviada = 0, // Faturas restauradas voltam como não enviadas
             fotosImpressora = faturaLixeira.fotosImpressora
         )
-        faturaDao.insert(faturaRestaurada)
+        // Usando insert, que é a operação correta do DAO
+        faturaDao.insertFatura(faturaRestaurada)
 
-        // Remove da lixeira
-        lixeiraDao.deleteFaturaLixeiraById(faturaLixeira.id)
+        // Chamada de método corrigida
+        lixeiraDao.deleteById(faturaLixeira.id)
     }
 
     fun excluirPermanentemente(faturaLixeira: FaturaLixeira) = viewModelScope.launch(Dispatchers.IO) {
-        lixeiraDao.deleteFaturaLixeiraById(faturaLixeira.id)
+        // Chamada de método corrigida
+        lixeiraDao.deleteById(faturaLixeira.id)
     }
 }

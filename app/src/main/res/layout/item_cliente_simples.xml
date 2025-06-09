@@ -1,17 +1,45 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:orientation="vertical"
+    android:orientation="horizontal"
     android:padding="16dp"
+    android:gravity="center_vertical"
     android:background="?android:attr/selectableItemBackground">
 
-    <TextView
-        android:id="@+id/textViewNomeCliente"
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/textViewNomeCliente"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:textColor="@android:color/black"
+            tools:text="Nome do Cliente" />
+
+        <TextView
+            android:id="@+id/textViewDetalhesCliente"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="14sp"
+            android:textColor="@android:color/darker_gray"
+            tools:text="CPF/CNPJ ou Telefone" />
+    </LinearLayout>
+
+    <ImageButton
+        android:id="@+id/buttonEditarCliente"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Nome do Cliente"
-        android:textSize="18sp"
-        android:textColor="@android:color/black" />
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="Editar Cliente"
+        android:padding="8dp"
+        app:srcCompat="@drawable/ic_edit" />
 
 </LinearLayout>

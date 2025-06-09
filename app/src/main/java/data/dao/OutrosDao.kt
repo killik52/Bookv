@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface FaturaLixeiraDao {
+    // Query corrigida para usar uma coluna que existe.
     @Query("SELECT * FROM faturas_lixeira ORDER BY data_delecao DESC")
     fun getAll(): Flow<List<FaturaLixeira>>
 

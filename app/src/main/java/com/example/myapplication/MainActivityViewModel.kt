@@ -14,7 +14,7 @@ import java.util.*
 class MainActivityViewModel(application: Application) : AndroidViewModel(application) {
 
     private val faturaDao = AppDatabase.getDatabase(application).faturaDao()
-    private val lixeiraDao = AppDatabase.getDatabase(application).lixeiraDao()
+    private val lixeiraDao = AppDatabase.getDatabase(application).lixeiraDao() // Corrigido
 
     val faturas: LiveData<List<FaturaResumidaItem>> = faturaDao.getAllFaturas()
         .map { faturas ->
@@ -24,6 +24,7 @@ class MainActivityViewModel(application: Application) : AndroidViewModel(applica
     fun moverFaturaParaLixeira(faturaResumida: FaturaResumidaItem) = viewModelScope.launch(Dispatchers.IO) {
         val faturaCompleta = faturaDao.getFaturaById(faturaResumida.id) ?: return@launch
 
+        // Objeto FaturaLixeira corrigido para corresponder à entidade
         val faturaNaLixeira = FaturaLixeira(
             faturaOriginalId = faturaCompleta.id,
             numeroFatura = faturaCompleta.numeroFatura,
@@ -31,6 +32,7 @@ class MainActivityViewModel(application: Application) : AndroidViewModel(applica
             artigos = faturaCompleta.artigos,
             subtotal = faturaCompleta.subtotal,
             desconto = faturaCompleta.desconto,
+            descontoPercent = faturaCompleta.descontoPercent,
             taxaEntrega = faturaCompleta.taxaEntrega,
             saldoDevedor = faturaCompleta.saldoDevedor,
             data = faturaCompleta.data,
@@ -39,7 +41,8 @@ class MainActivityViewModel(application: Application) : AndroidViewModel(applica
             dataDelecao = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
         )
 
-        lixeiraDao.moveToLixeira(faturaNaLixeira)
+        // Chamada de método corrigida
+        lixeiraDao.insert(faturaNaLixeira)
         faturaDao.deleteFaturaById(faturaCompleta.id)
     }
 

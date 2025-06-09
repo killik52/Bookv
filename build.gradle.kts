@@ -5,14 +5,12 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        // As dependências aqui geralmente são para plugins do próprio Android/Kotlin
-        classpath("com.android.tools.build:gradle:8.9.2") // Verifique a versão mais recente
-        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.23") // Verifique a versão mais recente
+        // As dependências agora são gerenciadas no bloco de plugins
     }
 }
 
 plugins {
-    id("com.android.application") version "8.9.2" apply false
+    id("com.android.application") version "8.4.0" apply false
     id("org.jetbrains.kotlin.android") version "1.9.23" apply false
     id("com.google.devtools.ksp") version "1.9.23-1.0.19" apply false
 }
