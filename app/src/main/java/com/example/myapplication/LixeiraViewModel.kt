@@ -21,14 +21,14 @@ class LixeiraViewModel(application: Application) : AndroidViewModel(application)
             id = faturaLixeira.faturaOriginalId,
             numeroFatura = faturaLixeira.numeroFatura,
             cliente = faturaLixeira.cliente,
-            artigos = faturaLixeira.artigos, // Passa a lista diretamente
+            artigos = faturaLixeira.artigos, // Agora é List<ArtigoItem>?
             subtotal = faturaLixeira.subtotal,
             desconto = faturaLixeira.desconto,
             descontoPercent = faturaLixeira.descontoPercent,
             taxaEntrega = faturaLixeira.taxaEntrega,
             saldoDevedor = faturaLixeira.saldoDevedor,
             data = faturaLixeira.data,
-            notas = faturaLixeira.notas, // Passa a lista diretamente
+            notas = faturaLixeira.notas, // Agora é List<String>?
             foiEnviada = 0, // Faturas restauradas voltam como não enviadas
             fotosImpressora = faturaLixeira.fotosImpressora
         )

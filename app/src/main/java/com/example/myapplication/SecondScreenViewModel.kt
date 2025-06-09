@@ -29,11 +29,9 @@ class SecondScreenViewModel(application: Application) : AndroidViewModel(applica
     private val _fotosDaFatura = MutableLiveData<List<FaturaFoto>>()
     val fotosDaFatura: LiveData<List<FaturaFoto>> = _fotosDaFatura
 
+    // Este LiveData para notas pode ser removido, pois as notas agora vêm diretamente na Fatura
     private val _notasDaFatura = MutableLiveData<List<String>>()
     val notasDaFatura: LiveData<List<String>> = _notasDaFatura
-
-    private val _faturaSalvaId = MutableLiveData<Long?>()
-    val faturaSalvaId: LiveData<Long?> = _faturaSalvaId
 
 
     fun carregarFatura(faturaId: Long) = viewModelScope.launch(Dispatchers.IO) {
@@ -44,8 +42,8 @@ class SecondScreenViewModel(application: Application) : AndroidViewModel(applica
             val clienteCarregado = faturaCarregada.cliente?.let { clienteDao.getByName(it) }
             _cliente.postValue(clienteCarregado)
 
-            // Carrega notas, fotos, etc.
-            val notas = faturaCarregada.notas?.split("|")?.filter { it.isNotEmpty() } ?: emptyList()
+            // Carrega notas: faturaCarregada.notas já é List<String>
+            val notas = faturaCarregada.notas ?: emptyList() // <-- CORREÇÃO AQUI: Remove .split("|")
             _notasDaFatura.postValue(notas)
         }
     }
@@ -56,8 +54,14 @@ class SecondScreenViewModel(application: Application) : AndroidViewModel(applica
     }
 
     fun salvarFaturaCompleta(fatura: Fatura, artigos: List<ArtigoItem>, notas: List<String>, fotos: List<String>) = viewModelScope.launch(Dispatchers.IO) {
-        // Combinar notas específicas e padrão em uma única string
-        fatura.notas = notas.joinToString("|")
+        // fatura.notas já é List<String>, não precisa de joinToString aqui se o TypeConverter estiver ativo
+        // Se você quiser garantir que o Room salve como uma única string para compatibilidade,
+        // E o TypeConverter não estiver tratando List<String> para String de maneira específica,
+        // você ainda pode querer converter para String aqui e ter um TypeConverter que faz o inverso.
+        // Mas o objetivo dos TypeConverters é eliminar essa conversão manual aqui.
+        // Com o TypeConverter de List<String> para String, o Room cuida disso.
+        // A linha abaixo pode ser removida se o TypeConverter estiver ativo e funcionando como esperado.
+        // fatura.notas = notas.joinToString("|") // Remova ou comente esta linha se o TypeConverter for usado.
 
         // Salvar ou atualizar a fatura principal para obter o ID
         val idFaturaSalva = faturaDao.insertFatura(fatura)
