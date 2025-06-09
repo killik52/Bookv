@@ -32,7 +32,7 @@ class AdicionarClienteActivity : AppCompatActivity() {
         editTextPesquisa = findViewById(R.id.editTextPesquisa)
         // O ID no seu XML é textViewNovoartigo, o que parece um erro de digitação no XML.
         // Se o app crashar aqui, renomeie o ID no XML para textViewNovoCliente.
-        textViewNovoCliente = findViewById(R.id.textViewNovoartigo)
+        textViewNovoCliente = findViewById(R.id.textViewNovoCliente) // Corrected line
 
         // Configura o Adapter
         adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, mutableListOf<String>())

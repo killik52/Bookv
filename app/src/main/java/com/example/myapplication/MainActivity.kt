@@ -29,6 +29,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private val viewModel: MainActivityViewModel by viewModels()
+
     private lateinit var faturaAdapter: FaturaResumidaAdapter
 
     private var isGridViewVisible = false
@@ -99,7 +100,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupListeners() {
-        binding.faturaTitleContainer.setOnClickListener { toggleGridView() }
+        binding.faturaTitleContainer.setOnClickListener {
+            if (isGridViewVisible) {
+                hideGridView() // Hide if already visible
+            } else {
+                showGridView() // Show if not visible
+            }
+        }
         binding.addButton.setOnClickListener { requestStorageAndCameraPermissions() }
         binding.graficosButton.setOnClickListener { startActivity(Intent(this, ResumoFinanceiroActivity::class.java)) }
         binding.searchButton.setOnClickListener { /* Lógica de busca a ser implementada no ViewModel */ }
@@ -116,12 +123,23 @@ class MainActivity : AppCompatActivity() {
         binding.menuGridView.setOnItemClickListener { _, _, position, _ ->
             val selectedOption = menuOptionsAdapter.getItem(position).toString()
             when (selectedOption) {
-                "Fatura" -> toggleGridView()
-                "Cliente" -> startActivity(Intent(this, ListarClientesActivity::class.java))
-                "Artigo" -> startActivity(Intent(this, ListarArtigosActivity::class.java))
-                "Lixeira" -> startActivityForResult(Intent(this, LixeiraActivity::class.java), LIXEIRA_REQUEST_CODE)
+                "Fatura" -> {
+                    // Clicking "Fatura" in the menu itself should close the menu
+                    hideGridView()
+                }
+                "Cliente" -> {
+                    startActivity(Intent(this, ListarClientesActivity::class.java))
+                    hideGridView() // Hide the menu after navigating
+                }
+                "Artigo" -> {
+                    startActivity(Intent(this, ListarArtigosActivity::class.java))
+                    hideGridView() // Hide the menu after navigating
+                }
+                "Lixeira" -> {
+                    startActivityForResult(Intent(this, LixeiraActivity::class.java), LIXEIRA_REQUEST_CODE)
+                    hideGridView() // Hide the menu after navigating
+                }
             }
-            if (isGridViewVisible) toggleGridView()
         }
     }
 
@@ -206,23 +224,32 @@ class MainActivity : AppCompatActivity() {
         startActivityForResult(Intent(this, SecondScreenActivity::class.java), SECOND_SCREEN_REQUEST_CODE)
     }
 
-    private fun toggleGridView() {
-        val animation = if (isGridViewVisible) R.anim.slide_up else R.anim.slide_down
-        val anim = AnimationUtils.loadAnimation(this, animation)
+    // Function to explicitly show the GridView
+    private fun showGridView() {
+        val anim = AnimationUtils.loadAnimation(this, R.anim.slide_down)
         anim.setAnimationListener(object : Animation.AnimationListener {
             override fun onAnimationStart(p0: Animation?) {}
             override fun onAnimationEnd(p0: Animation?) {
-                if (isGridViewVisible) {
-                    binding.menuGridView.visibility = View.GONE
-                }
+                isGridViewVisible = true
             }
             override fun onAnimationRepeat(p0: Animation?) {}
         })
-        if (!isGridViewVisible) {
-            binding.menuGridView.visibility = View.VISIBLE
-        }
+        binding.menuGridView.visibility = View.VISIBLE
         binding.menuGridView.startAnimation(anim)
-        isGridViewVisible = !isGridViewVisible
+    }
+
+    // Function to explicitly hide the GridView
+    private fun hideGridView() {
+        val anim = AnimationUtils.loadAnimation(this, R.anim.slide_up)
+        anim.setAnimationListener(object : Animation.AnimationListener {
+            override fun onAnimationStart(p0: Animation?) {}
+            override fun onAnimationEnd(p0: Animation?) {
+                binding.menuGridView.visibility = View.GONE
+                isGridViewVisible = false
+            }
+            override fun onAnimationRepeat(p0: Animation?) {}
+        })
+        binding.menuGridView.startAnimation(anim)
     }
 
     private fun initializeMediaPlayer() {
@@ -233,7 +260,6 @@ class MainActivity : AppCompatActivity() {
         mediaPlayer?.start()
     }
 
-    // FUNÇÃO QUE ESTAVA FALTANDO
     private fun showToast(message: String) {
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
     }
