@@ -13,7 +13,6 @@ import android.view.View
 import android.view.animation.Animation
 import android.view.animation.AnimationUtils
 import android.widget.ArrayAdapter
-import android.widget.EditText
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
@@ -21,12 +20,10 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.myapplication.databinding.ActivityMainBinding
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
-import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
 
@@ -35,14 +32,11 @@ class MainActivity : AppCompatActivity() {
     private lateinit var faturaAdapter: FaturaResumidaAdapter
 
     private var isGridViewVisible = false
-    private var isSearchActive = false // Controla se a lista está filtrada
-
     private var mediaPlayer: MediaPlayer? = null
 
     private val LIXEIRA_REQUEST_CODE = 1002
     private val SECOND_SCREEN_REQUEST_CODE = 1
 
-    // Launcher moderno para permissões
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
@@ -55,7 +49,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // Launcher moderno para o scanner de código de barras
     private val barcodeLauncher = registerForActivityResult(ScanContract()) { result ->
         if (result.contents == null) {
             showToast("Leitura cancelada")
@@ -80,7 +73,6 @@ class MainActivity : AppCompatActivity() {
         observeViewModel()
     }
 
-    // Configura o adapter e o RecyclerView
     private fun setupRecyclerView() {
         faturaAdapter = FaturaResumidaAdapter(
             this,
@@ -96,7 +88,7 @@ class MainActivity : AppCompatActivity() {
                     .setMessage("Deseja mover a fatura #${fatura.numeroFatura} para a lixeira?")
                     .setPositiveButton("Sim") { _, _ ->
                         viewModel.moverFaturaParaLixeira(fatura)
-                        Toast.makeText(this, "Fatura movida para a lixeira.", Toast.LENGTH_SHORT).show()
+                        showToast("Fatura movida para a lixeira.")
                     }
                     .setNegativeButton("Não", null)
                     .show()
@@ -104,54 +96,22 @@ class MainActivity : AppCompatActivity() {
         )
         binding.recyclerViewFaturas.layoutManager = LinearLayoutManager(this)
         binding.recyclerViewFaturas.adapter = faturaAdapter
-        binding.recyclerViewFaturas.addItemDecoration(VerticalSpaceItemDecoration(resources.getDimensionPixelSize(R.dimen.page_margin) / 4))
     }
 
-    // Configura os listeners para os botões e outros componentes
     private fun setupListeners() {
         binding.faturaTitleContainer.setOnClickListener { toggleGridView() }
-
-        binding.addButton.setOnClickListener {
-            requestStorageAndCameraPermissions()
-        }
-
-        binding.graficosButton.setOnClickListener {
-            startActivity(Intent(this, ResumoFinanceiroActivity::class.java))
-        }
-
-        binding.searchButton.setOnClickListener {
-            showSearchDialog()
-        }
-
+        binding.addButton.setOnClickListener { requestStorageAndCameraPermissions() }
+        binding.graficosButton.setOnClickListener { startActivity(Intent(this, ResumoFinanceiroActivity::class.java)) }
+        binding.searchButton.setOnClickListener { /* Lógica de busca a ser implementada no ViewModel */ }
         binding.dollarIcon.setOnClickListener {
-            val options = ScanOptions().apply {
-                setDesiredBarcodeFormats(ScanOptions.CODE_128)
-                setPrompt("Escaneie o código de barras no PDF")
-                setCameraId(0)
-                setBeepEnabled(false)
-                setOrientationLocked(false)
-            }
+            val options = ScanOptions().setDesiredBarcodeFormats(ScanOptions.CODE_128).setPrompt("Escaneie o código").setBeepEnabled(false)
             barcodeLauncher.launch(options)
         }
-
-        binding.homeIcon.setOnClickListener {
-            val intent = Intent(this, MainActivity::class.java)
-            intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-            startActivity(intent)
-            overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right)
-        }
-
-        binding.moreIcon.setOnClickListener {
-            startActivity(Intent(this, DefinicoesActivity::class.java))
-            overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
-        }
+        binding.moreIcon.setOnClickListener { startActivity(Intent(this, DefinicoesActivity::class.java)) }
     }
 
-    // Configura o menu dropdown
     private fun setupMenu() {
-        val menuOptionsAdapter = ArrayAdapter.createFromResource(
-            this, R.array.menu_options, R.layout.item_menu
-        )
+        val menuOptionsAdapter = ArrayAdapter.createFromResource(this, R.array.menu_options, R.layout.item_menu)
         binding.menuGridView.adapter = menuOptionsAdapter
         binding.menuGridView.setOnItemClickListener { _, _, position, _ ->
             val selectedOption = menuOptionsAdapter.getItem(position).toString()
@@ -161,51 +121,36 @@ class MainActivity : AppCompatActivity() {
                 "Artigo" -> startActivity(Intent(this, ListarArtigosActivity::class.java))
                 "Lixeira" -> startActivityForResult(Intent(this, LixeiraActivity::class.java), LIXEIRA_REQUEST_CODE)
             }
-            if (isGridViewVisible) toggleGridView() // Esconde o menu após a seleção
+            if (isGridViewVisible) toggleGridView()
         }
     }
 
-    // Observa o LiveData do ViewModel para atualizar a lista de faturas
     private fun observeViewModel() {
         viewModel.faturas.observe(this) { faturas ->
-            faturas?.let {
-                faturaAdapter.updateFaturas(it)
-                Log.d("MainActivity", "Adapter atualizado com ${it.size} faturas.")
+            faturas?.let { faturaAdapter.updateFaturas(it) }
+        }
+
+        viewModel.faturaEncontrada.observe(this) { fatura ->
+            fatura?.let {
+                showToast("Fatura #${it.numeroFatura} encontrada!")
+                val intent = Intent(this, SecondScreenActivity::class.java).apply {
+                    putExtra("fatura_id", it.id)
+                }
+                startActivity(intent)
+                viewModel.onBuscaConcluida()
             }
         }
     }
 
-    // Mostra o diálogo de busca
-    private fun showSearchDialog() {
-        val builder = AlertDialog.Builder(this)
-        builder.setTitle(getString(R.string.search_dialog_title))
-
-        val input = EditText(this)
-        input.hint = getString(R.string.search_dialog_hint)
-        builder.setView(input)
-
-        builder.setPositiveButton(getString(R.string.search_dialog_positive_button)) { dialog, _ ->
-            val query = input.text.toString().trim()
-            if (query.isEmpty()) {
-                // Se a busca for limpa, a observação do LiveData já irá restaurar a lista
-                isSearchActive = false
-                // A lista será restaurada automaticamente pelo observeViewModel
-                // Não é necessário chamar `viewModel.carregarFaturas()`
-            } else {
-                // TODO: Implementar a lógica de busca no ViewModel/Repository
-                // viewModel.buscarFaturas(query)
-                isSearchActive = true
-                Toast.makeText(this, "Funcionalidade de busca a ser implementada no ViewModel.", Toast.LENGTH_SHORT).show()
-            }
-            dialog.dismiss()
+    private fun openInvoiceByBarcode(barcodeValue: String) {
+        val faturaId = barcodeValue.toLongOrNull()
+        if (faturaId != null) {
+            viewModel.buscarFaturaPorId(faturaId)
+        } else {
+            showToast("Código de barras inválido.")
         }
-        builder.setNegativeButton(getString(R.string.search_dialog_negative_button)) { dialog, _ ->
-            dialog.cancel()
-        }
-        builder.show()
     }
 
-    // Lógica de permissões
     private fun requestStorageAndCameraPermissions() {
         val permissionsToRequest = mutableListOf<String>()
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
@@ -245,13 +190,12 @@ class MainActivity : AppCompatActivity() {
             .setMessage(message)
             .setPositiveButton("OK") { _, _ ->
                 if (!shouldShowRationale) {
-                    // Leva o usuário para as configurações do app
                     val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
                     val uri = Uri.fromParts("package", packageName, null)
                     intent.data = uri
                     startActivity(intent)
                 } else {
-                    requestStorageAndCameraPermissions() // Tenta pedir de novo
+                    requestStorageAndCameraPermissions()
                 }
             }
             .setNegativeButton("Cancelar", null)
@@ -262,17 +206,9 @@ class MainActivity : AppCompatActivity() {
         startActivityForResult(Intent(this, SecondScreenActivity::class.java), SECOND_SCREEN_REQUEST_CODE)
     }
 
-    private fun openInvoiceByBarcode(barcodeValue: String) {
-        // TODO: Mover esta lógica para o ViewModel e Repository
-        lifecycleScope.launch {
-            Toast.makeText(this@MainActivity, "Busca por barcode a ser implementada no ViewModel.", Toast.LENGTH_SHORT).show()
-        }
-    }
-
     private fun toggleGridView() {
         val animation = if (isGridViewVisible) R.anim.slide_up else R.anim.slide_down
         val anim = AnimationUtils.loadAnimation(this, animation)
-
         anim.setAnimationListener(object : Animation.AnimationListener {
             override fun onAnimationStart(p0: Animation?) {}
             override fun onAnimationEnd(p0: Animation?) {
@@ -282,7 +218,6 @@ class MainActivity : AppCompatActivity() {
             }
             override fun onAnimationRepeat(p0: Animation?) {}
         })
-
         if (!isGridViewVisible) {
             binding.menuGridView.visibility = View.VISIBLE
         }
@@ -291,16 +226,16 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun initializeMediaPlayer() {
-        try {
-            mediaPlayer = MediaPlayer.create(this, R.raw.beep)
-            mediaPlayer?.setOnErrorListener { _, _, _ -> true }
-        } catch (e: Exception) {
-            Log.e("MainActivity", "Erro ao carregar som de beep: ${e.message}")
-        }
+        mediaPlayer = MediaPlayer.create(this, R.raw.beep)
     }
 
     private fun emitBeep() {
         mediaPlayer?.start()
+    }
+
+    // FUNÇÃO QUE ESTAVA FALTANDO
+    private fun showToast(message: String) {
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
     }
 
     override fun onDestroy() {

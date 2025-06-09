@@ -11,7 +11,6 @@ import java.util.Locale
 
 class ResumoClienteAdapter(
     private var itens: List<ResumoClienteItem>
-    // Adicione um onItemClick se necessário para ir para detalhes do cliente
 ) : RecyclerView.Adapter<ResumoClienteAdapter.ViewHolder>() {
 
     private val decimalFormat = DecimalFormat("R$ #,##0.00", DecimalFormatSymbols(Locale("pt", "BR")))
@@ -31,7 +30,6 @@ class ResumoClienteAdapter(
         val item = itens[position]
         holder.textViewNomeCliente.text = item.nomeCliente
         holder.textViewTotalGasto.text = "Total Gasto: ${decimalFormat.format(item.totalGasto)}"
-        // holder.itemView.setOnClickListener { onItemClick(item) } // Se houver clique
     }
 
     override fun getItemCount() = itens.size

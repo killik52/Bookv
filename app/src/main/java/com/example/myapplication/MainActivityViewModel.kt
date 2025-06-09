@@ -14,17 +14,19 @@ import java.util.*
 class MainActivityViewModel(application: Application) : AndroidViewModel(application) {
 
     private val faturaDao = AppDatabase.getDatabase(application).faturaDao()
-    private val lixeiraDao = AppDatabase.getDatabase(application).lixeiraDao() // Corrigido
+    private val lixeiraDao = AppDatabase.getDatabase(application).lixeiraDao()
 
     val faturas: LiveData<List<FaturaResumidaItem>> = faturaDao.getAllFaturas()
         .map { faturas ->
             faturas.map { converterParaFaturaResumida(it) }
         }.asLiveData()
 
+    // LiveData para a fatura encontrada pelo código de barras
+    private val _faturaEncontrada = MutableLiveData<Fatura?>()
+    val faturaEncontrada: LiveData<Fatura?> = _faturaEncontrada
+
     fun moverFaturaParaLixeira(faturaResumida: FaturaResumidaItem) = viewModelScope.launch(Dispatchers.IO) {
         val faturaCompleta = faturaDao.getFaturaById(faturaResumida.id) ?: return@launch
-
-        // Objeto FaturaLixeira corrigido para corresponder à entidade
         val faturaNaLixeira = FaturaLixeira(
             faturaOriginalId = faturaCompleta.id,
             numeroFatura = faturaCompleta.numeroFatura,
@@ -40,10 +42,19 @@ class MainActivityViewModel(application: Application) : AndroidViewModel(applica
             fotosImpressora = faturaCompleta.fotosImpressora,
             dataDelecao = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
         )
-
-        // Chamada de método corrigida
         lixeiraDao.insert(faturaNaLixeira)
         faturaDao.deleteFaturaById(faturaCompleta.id)
+    }
+
+    // Função para buscar a fatura pelo ID (código de barras)
+    fun buscarFaturaPorId(id: Long) = viewModelScope.launch(Dispatchers.IO) {
+        val fatura = faturaDao.getFaturaById(id)
+        _faturaEncontrada.postValue(fatura)
+    }
+
+    // Função para ser chamada quando a busca for concluída
+    fun onBuscaConcluida() {
+        _faturaEncontrada.value = null
     }
 
     private fun converterParaFaturaResumida(fatura: Fatura): FaturaResumidaItem {
