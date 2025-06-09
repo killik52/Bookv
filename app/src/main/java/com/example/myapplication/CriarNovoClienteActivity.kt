@@ -1,5 +1,7 @@
 package com.example.myapplication
 
+import android.app.Activity
+import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.viewModels
@@ -13,10 +15,12 @@ import com.example.myapplication.data.model.Cliente
 import com.example.myapplication.databinding.ActivityCriarNovoClienteBinding
 import kotlinx.coroutines.launch
 
-// ViewModel simples para esta tela
+// ViewModel para a criação de cliente
 class CriarClienteViewModel(private val repository: ClienteRepository) : ViewModel() {
-    fun salvarCliente(cliente: Cliente) = viewModelScope.launch {
-        repository.inserir(cliente)
+    // A função agora retorna o ID do novo cliente para que possamos passá-lo de volta
+    fun salvarCliente(cliente: Cliente, onSaveFinished: (novoId: Long) -> Unit) = viewModelScope.launch {
+        val id = repository.inserir(cliente)
+        onSaveFinished(id)
     }
 }
 
@@ -26,9 +30,13 @@ class CriarNovoClienteActivity : AppCompatActivity() {
     private val viewModel: CriarClienteViewModel by viewModels {
         object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                val dao = AppDatabase.getDatabase(application).clienteDao()
-                val repository = ClienteRepository(dao)
-                return CriarClienteViewModel(repository) as T
+                if (modelClass.isAssignableFrom(CriarClienteViewModel::class.java)) {
+                    val dao = AppDatabase.getDatabase(application).clienteDao()
+                    val repository = ClienteRepository(dao)
+                    @Suppress("UNCHECKED_CAST")
+                    return CriarClienteViewModel(repository) as T
+                }
+                throw IllegalArgumentException("Unknown ViewModel class")
             }
         }
     }
@@ -38,41 +46,46 @@ class CriarNovoClienteActivity : AppCompatActivity() {
         binding = ActivityCriarNovoClienteBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        binding.btnSalvar.setOnClickListener {
+        // Corrigido para usar o ID correto do seu layout XML ("textViewGuardarCliente")
+        binding.textViewGuardarCliente.setOnClickListener {
             salvarNovoCliente()
-        }
-
-        binding.backButton.setOnClickListener {
-            finish()
         }
     }
 
     private fun salvarNovoCliente() {
-        val nome = binding.editTextNome.text.toString()
+        val nome = binding.editTextNomeCliente.text.toString().trim()
         if (nome.isBlank()) {
             Toast.makeText(this, "O nome do cliente é obrigatório.", Toast.LENGTH_SHORT).show()
             return
         }
 
         val novoCliente = Cliente(
+            id = 0, // Garante que é um novo cliente
             nome = nome,
-            email = binding.editTextEmail.text.toString(),
-            telefone = binding.editTextTelefone.text.toString(),
-            informacoesAdicionais = binding.editTextInformacoesAdicionais.text.toString(),
-            cpf = binding.editTextCpf.text.toString(),
-            cnpj = binding.editTextCnpj.text.toString(),
-            logradouro = binding.editTextLogradouro.text.toString(),
-            numero = binding.editTextNumero.text.toString(),
-            complemento = binding.editTextComplemento.text.toString(),
-            bairro = binding.editTextBairro.text.toString(),
-            municipio = binding.editTextMunicipio.text.toString(),
-            uf = binding.editTextUf.text.toString(),
-            cep = binding.editTextCep.text.toString(),
-            numeroSerial = "" // Adicionar campo se houver na UI
+            email = binding.editTextEmailCliente.text.toString().trim(),
+            telefone = binding.editTextTelefoneCliente.text.toString().trim(),
+            informacoesAdicionais = binding.editTextInformacoesAdicionais.text.toString().trim(),
+            cpf = binding.editTextCPFCliente.text.toString().trim(),
+            cnpj = binding.editTextCNPJCliente.text.toString().trim(),
+            logradouro = binding.editTextLogradouro.text.toString().trim(),
+            numero = binding.editTextNumero.text.toString().trim(),
+            complemento = binding.editTextComplemento.text.toString().trim(),
+            bairro = binding.editTextBairro.text.toString().trim(),
+            municipio = binding.editTextMunicipio.text.toString().trim(),
+            uf = binding.editTextUF.text.toString().trim(),
+            cep = binding.editTextCEP.text.toString().trim(),
+            numeroSerial = "" // Este campo não está presente no layout de criação
         )
 
-        viewModel.salvarCliente(novoCliente)
-        Toast.makeText(this, "Cliente '$nome' salvo com sucesso!", Toast.LENGTH_SHORT).show()
-        finish()
+        viewModel.salvarCliente(novoCliente) { novoId ->
+            // Após salvar, retorna o ID e o nome para a tela anterior
+            val resultIntent = Intent().apply {
+                putExtra("cliente_id", novoId)
+                putExtra("nome_cliente", nome)
+            }
+            setResult(Activity.RESULT_OK, resultIntent)
+            Toast.makeText(this, "Cliente '$nome' salvo com sucesso!", Toast.LENGTH_SHORT).show()
+            finish() // Fecha a tela de criação
+        }
     }
 }

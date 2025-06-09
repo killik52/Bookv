@@ -17,4 +17,12 @@ interface ArtigoDao {
 
     @Query("DELETE FROM artigos WHERE id = :id")
     suspend fun deleteById(id: Long)
+
+    // Função que estava faltando, necessária para o ArtigoViewModel
+    @Query("SELECT * FROM artigos WHERE id = :id")
+    suspend fun getById(id: Long): Artigo?
+
+    // Função que estava faltando, necessária para o ArquivosRecentesViewModel
+    @Query("SELECT * FROM artigos WHERE guardar_fatura = 1 ORDER BY id DESC")
+    fun getArtigosRecentes(): Flow<List<Artigo>>
 }
