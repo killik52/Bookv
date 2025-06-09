@@ -1,3 +1,4 @@
+// app/src/main/java/data/model/Fatura.kt
 package com.example.myapplication.data.model
 
 import androidx.room.ColumnInfo
@@ -13,7 +14,7 @@ data class Fatura(
     var numeroFatura: String?,
 
     var cliente: String?,
-    var artigos: String?, // Mantido por simplicidade na migração
+    // REMOVIDO: var artigos: String?, // Agora tratado por FaturaItem
     var subtotal: Double?,
     var desconto: Double?,
 
@@ -27,12 +28,9 @@ data class Fatura(
     var saldoDevedor: Double?,
 
     var data: String?,
-    var notas: String?,
+    // REMOVIDO: var notas: String?, // Agora tratado por FaturaNota
+    // REMOVIDO: var fotosImpressora: String?, // Agora tratado por FaturaFoto
 
     @ColumnInfo(name = "foi_enviada", defaultValue = "0")
-    var foiEnviada: Int, // 0 para false, 1 para true
-
-    // Coluna antiga de fotos, pode ser removida se a migração para FaturaFoto for garantida
-    @ColumnInfo(name = "fotos_impressora")
-    var fotosImpressora: String?
+    var foiEnviada: Int // 0 para false, 1 para true
 )

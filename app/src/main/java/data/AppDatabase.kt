@@ -1,54 +1,27 @@
 package com.example.myapplication.data
 
-import android.content.Context
 import androidx.room.Database
-import androidx.room.Room
 import androidx.room.RoomDatabase
-import com.example.myapplication.data.dao.*
-import com.example.myapplication.data.model.*
+import com.example.myapplication.data.dao.ArtigoDao
+import com.example.myapplication.data.dao.ClienteBloqueadoDao
+import com.example.myapplication.data.dao.ClienteDao
+import com.example.myapplication.data.dao.FaturaDao
+import com.example.myapplication.data.model.Artigo
+import com.example.myapplication.data.model.Cliente
+import com.example.myapplication.data.model.ClienteBloqueado
+import com.example.myapplication.data.model.Fatura
+import com.example.myapplication.data.model.FaturaFoto
+import com.example.myapplication.data.model.FaturaItem
+import com.example.myapplication.data.model.FaturaNota
 
 @Database(
-    entities = [
-        Fatura::class, Cliente::class, Artigo::class, FaturaFoto::class,
-        FaturaItem::class, ClienteBloqueado::class, FaturaLixeira::class,
-        // Entidades que estavam faltando:
-        InformacaoEmpresa::class, InstrucaoPagamento::class, Nota::class
-    ],
-    version = 4, // <<== INCREMENTADO VERSÃO PELA MUDANÇA NO ESQUEMA
+    entities = [Cliente::class, Fatura::class, FaturaItem::class, FaturaNota::class, FaturaFoto::class, Artigo::class, ClienteBloqueado::class],
+    version = 1,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
-
-    abstract fun faturaDao(): FaturaDao
     abstract fun clienteDao(): ClienteDao
-    abstract fun artigoDao(): ArtigoDao
-
-    // DAOs que estavam faltando ou incorretos:
-    abstract fun lixeiraDao(): FaturaLixeiraDao // Corrigido para FaturaLixeiraDao
+    abstract fun faturaDao(): FaturaDao
     abstract fun clienteBloqueadoDao(): ClienteBloqueadoDao
-    abstract fun informacaoEmpresaDao(): InformacaoEmpresaDao
-    abstract fun instrucaoPagamentoDao(): InstrucaoPagamentoDao
-    abstract fun notaDao(): NotaDao
-
-
-    companion object {
-        @Volatile
-        private var INSTANCE: AppDatabase? = null
-
-        fun getDatabase(context: Context): AppDatabase {
-            return INSTANCE ?: synchronized(this) {
-                val instance = Room.databaseBuilder(
-                    context.applicationContext,
-                    AppDatabase::class.java,
-                    "bookv_database"
-                )
-                    // fallbackToDestructiveMigration irá apagar seus dados atuais.
-                    // OK para desenvolvimento, mas para produção, implemente migrações.
-                    .fallbackToDestructiveMigration()
-                    .build()
-                INSTANCE = instance
-                instance
-            }
-        }
-    }
+    abstract fun artigoDao(): ArtigoDao
 }

@@ -1,92 +1,77 @@
+// app/src/main/java/com/example/myapplication/InstrucoesPagamentoActivity.kt
 package com.example.myapplication
 
 import android.content.Context
-import android.content.SharedPreferences
 import android.os.Bundle
-import android.util.Log
-import android.widget.EditText
-import android.widget.ImageView
-import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
+import com.example.myapplication.data.AppDatabase
+import com.example.myapplication.data.dao.InstrucaoPagamentoDao
+import com.example.myapplication.data.model.InstrucaoPagamento
+import com.example.myapplication.databinding.ActivityInstrucoesPagamentoBinding
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class InstrucoesPagamentoActivity : AppCompatActivity() {
 
-    // Variáveis para os novos campos
-    private lateinit var editTextPix: EditText
-    private lateinit var editTextBanco: EditText
-    private lateinit var editTextAgencia: EditText
-    private lateinit var editTextConta: EditText
-    private lateinit var editTextOutrasInstrucoes: EditText // Renomeado do original
-
-    private lateinit var backButton: ImageView
-    private lateinit var saveButton: TextView
-    private lateinit var sharedPreferences: SharedPreferences
-
-    // Constantes para as chaves de armazenamento
-    private val PREFS_NAME = "InstrucoesPagamentoPrefs"
-    private val KEY_PIX = "instrucoes_pix"
-    private val KEY_BANCO = "instrucoes_banco"
-    private val KEY_AGENCIA = "instrucoes_agencia"
-    private val KEY_CONTA = "instrucoes_conta"
-    private val KEY_OUTRAS = "instrucoes_outras" // Chave para o campo de texto livre
+    private lateinit var binding: ActivityInstrucoesPagamentoBinding
+    private lateinit var instrucaoPagamentoDao: InstrucaoPagamentoDao
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_instrucoes_pagamento)
+        binding = ActivityInstrucoesPagamentoBinding.inflate(layoutInflater)
+        setContentView(binding.root)
 
-        sharedPreferences = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        instrucaoPagamentoDao = AppDatabase.getDatabase(this).instrucaoPagamentoDao()
 
-        // Inicializa todos os componentes da UI
-        editTextPix = findViewById(R.id.editTextPix)
-        editTextBanco = findViewById(R.id.editTextBanco)
-        editTextAgencia = findViewById(R.id.editTextAgencia)
-        editTextConta = findViewById(R.id.editTextConta)
-        editTextOutrasInstrucoes = findViewById(R.id.editTextOutrasInstrucoes) // O ID antigo era editTextInstrucoesPagamento
+        setupToolbar()
+        loadInstrucoesPagamento()
+        setupListeners()
+    }
 
-        backButton = findViewById(R.id.backButtonInstrucoesPagamento)
-        saveButton = findViewById(R.id.saveButtonInstrucoesPagamento)
-
-        // Carrega os dados salvos nos campos
-        loadInstrucoes()
-
-        backButton.setOnClickListener {
-            finish()
-            overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right)
-        }
-
-        saveButton.setOnClickListener {
-            saveInstrucoes()
-            Toast.makeText(this, "Instruções de pagamento salvas!", Toast.LENGTH_SHORT).show()
-            finish()
-            overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right)
+    private fun setupToolbar() {
+        binding.toolbar.title = "Instruções de Pagamento"
+        setSupportActionBar(binding.toolbar)
+        supportActionBar?.setDisplayHomeAsUpEnabled(true)
+        binding.toolbar.setNavigationOnClickListener {
+            onBackPressedDispatcher.onBackPressed()
         }
     }
 
-    private fun loadInstrucoes() {
-        // Carrega o valor de cada campo individualmente
-        editTextPix.setText(sharedPreferences.getString(KEY_PIX, ""))
-        editTextBanco.setText(sharedPreferences.getString(KEY_BANCO, ""))
-        editTextAgencia.setText(sharedPreferences.getString(KEY_AGENCIA, ""))
-        editTextConta.setText(sharedPreferences.getString(KEY_CONTA, ""))
-        editTextOutrasInstrucoes.setText(sharedPreferences.getString(KEY_OUTRAS, ""))
-        Log.d("InstrucoesPagamento", "Instruções carregadas dos SharedPreferences.")
+    private fun loadInstrucoesPagamento() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            instrucaoPagamentoDao.getInstrucaoPagamento().collect { instrucao ->
+                withContext(Dispatchers.Main) {
+                    instrucao?.let {
+                        binding.editTextInstrucoesPagamento.setText(it.instrucoes)
+                    }
+                }
+            }
+        }
     }
 
-    private fun saveInstrucoes() {
-        val editor = sharedPreferences.edit()
-        // Salva o valor de cada campo individualmente
-        editor.putString(KEY_PIX, editTextPix.text.toString())
-        editor.putString(KEY_BANCO, editTextBanco.text.toString())
-        editor.putString(KEY_AGENCIA, editTextAgencia.text.toString())
-        editor.putString(KEY_CONTA, editTextConta.text.toString())
-        editor.putString(KEY_OUTRAS, editTextOutrasInstrucoes.text.toString())
-        editor.apply() // Aplica as alterações
-        Log.d("InstrucoesPagamento", "Instruções salvas nos SharedPreferences.")
+    private fun setupListeners() {
+        binding.btnSalvarInstrucoes.setOnClickListener {
+            salvarInstrucoesPagamento()
+        }
     }
 
-    override fun onBackPressed() {
-        super.onBackPressed()
-        overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right)
+    private fun salvarInstrucoesPagamento() {
+        val instrucoes = binding.editTextInstrucoesPagamento.text.toString()
+
+        val instrucaoPagamento = InstrucaoPagamento(
+            id = 1, // Sempre o ID 1 para a única entrada
+            instrucoes = instrucoes
+        )
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            instrucaoPagamentoDao.upsert(instrucaoPagamento)
+            withContext(Dispatchers.Main) {
+                Toast.makeText(this@InstrucoesPagamentoActivity, "Instruções salvas com sucesso!", Toast.LENGTH_SHORT).show()
+                finish()
+            }
+        }
     }
 }
