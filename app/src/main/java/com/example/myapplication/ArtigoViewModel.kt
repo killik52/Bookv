@@ -12,6 +12,10 @@ class ArtigoViewModel(application: Application) : AndroidViewModel(application) 
 
     private val artigoDao = AppDatabase.getDatabase(application).artigoDao()
 
+    // CORREÇÃO: Adicionada a propriedade para buscar todos os artigos.
+    // O .asLiveData() converte o Flow do Room em LiveData para a UI.
+    val todosArtigos: LiveData<List<Artigo>> = artigoDao.getAll().asLiveData()
+
     fun getArtigoById(id: Long): LiveData<Artigo?> {
         return liveData(Dispatchers.IO) {
             emit(artigoDao.getById(id))

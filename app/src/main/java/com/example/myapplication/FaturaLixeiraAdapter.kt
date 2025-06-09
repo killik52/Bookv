@@ -4,7 +4,6 @@ import android.view.LayoutInflater
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
 import com.example.myapplication.data.model.FaturaLixeira
-import com.example.myapplication.data.model.FaturaLixeiraItem
 import com.example.myapplication.databinding.ItemFaturaLixeiraBinding
 
 class FaturaLixeiraAdapter(

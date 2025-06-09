@@ -11,7 +11,7 @@
         android:id="@+id/imageViewLogoLoading"
         android:layout_width="120dp"
         android:layout_height="120dp"
-        android:src="@mipmap/logo"
+        android:src="@mipmap/ic_launcher"
         android:contentDescription="@string/app_name"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toTopOf="@+id/progressBarHorizontalLoading"
@@ -58,7 +58,7 @@
         android:visibility="gone"
         android:textColor="@android:color/black"
         android:textSize="16sp"
-        app:layout_constraintTop_toBottomOf="@+id/textViewPercentage"
+        app:layout_constraintTop_toTopOf="@+id/textViewPercentage"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 

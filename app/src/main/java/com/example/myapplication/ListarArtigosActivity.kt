@@ -38,9 +38,12 @@ class ListarArtigosActivity : AppCompatActivity() {
                 val resultIntent = Intent().apply {
                     putExtra("artigo_id", artigo.id)
                     putExtra("nome_artigo", artigo.nome)
-                    putExtra("quantidade", artigo.quantidade ?: 1)
+                    // Usa a quantidade do artigo, ou 1 como padrão
+                    val quantidade = artigo.quantidade ?: 1
+                    putExtra("quantidade", quantidade)
+                    // Calcula o preço total baseado na quantidade
                     val precoUnitario = artigo.preco ?: 0.0
-                    putExtra("valor", precoUnitario * (artigo.quantidade ?: 1))
+                    putExtra("valor", precoUnitario * quantidade)
                     putExtra("numero_serial", artigo.numeroSerial)
                     putExtra("descricao", artigo.descricao)
                 }
@@ -52,6 +55,7 @@ class ListarArtigosActivity : AppCompatActivity() {
 
     private fun observeArtigos() {
         // Observa as mudanças na lista de artigos do ViewModel
+        // Este código agora funcionará, pois 'todosArtigos' existe.
         viewModel.todosArtigos.observe(this) { artigos ->
             artigos?.let {
                 this.artigosList = it

@@ -47,8 +47,8 @@ class ClienteViewModel(application: Application) : AndroidViewModel(application)
             if (it.trim().isNotEmpty()) todosSeriais.add(it.trim())
         }
 
-        // CORRIGIDO: Busca a lista de faturas uma única vez
-        val faturas = faturaDao.getFaturasPorCliente(cliente.nome!!)
+        // Busca a lista de faturas uma única vez para otimizar
+        val faturas = faturaDao.getFaturasPorClienteNome(cliente.nome!!)
         faturas.forEach { fatura ->
             fatura.artigos?.split('|')?.forEach { artigoData ->
                 val parts = artigoData.split(',')

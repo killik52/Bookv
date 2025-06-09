@@ -1,6 +1,7 @@
 package com.example.myapplication.data.dao
 
 import androidx.room.*
+import com.example.myapplication.ResumoClienteItem
 import com.example.myapplication.data.model.Fatura
 import com.example.myapplication.data.model.FaturaFoto
 import com.example.myapplication.data.model.FaturaItem
@@ -10,7 +11,7 @@ import kotlinx.coroutines.flow.Flow
 interface FaturaDao {
     // FATURAS
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertFatura(fatura: Fatura): Long // Renomeado de insert para insertFatura
+    suspend fun insertFatura(fatura: Fatura): Long
 
     @Update
     suspend fun updateFatura(fatura: Fatura)
@@ -23,6 +24,33 @@ interface FaturaDao {
 
     @Query("DELETE FROM faturas WHERE id = :id")
     suspend fun deleteFaturaById(id: Long)
+
+    // Adicionado para o ClienteViewModel
+    @Query("SELECT * FROM faturas WHERE cliente = :clienteNome")
+    suspend fun getFaturasPorClienteNome(clienteNome: String): List<Fatura>
+
+    // Adicionado para o DetalhesFaturasMesActivity
+    @Query("SELECT * FROM faturas WHERE strftime('%Y', data) = :ano AND strftime('%m', data) = :mesFormatado ORDER BY data DESC")
+    fun getFaturasPorMesAno(ano: Int, mesFormatado: String): Flow<List<Fatura>>
+
+    // Adicionado para o ResumoFinanceiroViewModel
+    @Query("""
+        SELECT * FROM faturas
+        WHERE (:startDate IS NULL OR date(data) >= :startDate)
+        AND (:endDate IS NULL OR date(data) <= :endDate)
+    """)
+    fun getFaturasNoPeriodo(startDate: String?, endDate: String?): Flow<List<Fatura>>
+
+    // CORREÇÃO APLICADA AQUI
+    @Query("""
+        SELECT cliente AS nomeCliente, SUM(saldo_devedor) as totalGasto, MIN(id) as clienteId
+        FROM faturas
+        WHERE cliente IS NOT NULL AND (:startDate IS NULL OR date(data) >= :startDate) AND (:endDate IS NULL OR date(data) <= :endDate)
+        GROUP BY cliente
+        ORDER BY totalGasto DESC
+    """)
+    fun getResumoPorCliente(startDate: String?, endDate: String?): Flow<List<ResumoClienteItem>>
+
 
     // ITENS DA FATURA
     @Insert(onConflict = OnConflictStrategy.REPLACE)
