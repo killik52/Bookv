@@ -1,7 +1,6 @@
 package com.example.myapplication
 
 import android.content.ContentValues
-import android.database.Cursor
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
@@ -14,6 +13,7 @@ import android.widget.ListView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import data.model.ClienteBloqueado
 
 class ClientesBloqueadosActivity : AppCompatActivity() {
 
