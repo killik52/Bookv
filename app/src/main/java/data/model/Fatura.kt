@@ -3,6 +3,7 @@ package com.example.myapplication.data.model
 import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import com.example.myapplication.ArtigoItem // Importe ArtigoItem se ainda não estiver importado
 
 @Entity(tableName = "faturas")
 data class Fatura(
@@ -13,7 +14,8 @@ data class Fatura(
     var numeroFatura: String?,
 
     var cliente: String?,
-    var artigos: String?, // Mantido por simplicidade na migração
+    // Alterado o tipo para List<ArtigoItem>
+    var artigos: List<ArtigoItem>?,
     var subtotal: Double?,
     var desconto: Double?,
 
@@ -27,7 +29,8 @@ data class Fatura(
     var saldoDevedor: Double?,
 
     var data: String?,
-    var notas: String?,
+    // Alterado o tipo para List<String>
+    var notas: List<String>?,
 
     @ColumnInfo(name = "foi_enviada", defaultValue = "0")
     var foiEnviada: Int, // 0 para false, 1 para true

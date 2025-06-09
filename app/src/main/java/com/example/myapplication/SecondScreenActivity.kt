@@ -57,7 +57,9 @@ class SecondScreenActivity : AppCompatActivity() {
 
     private var nomeClienteSalvo: String? = null
     private var clienteIdSalvo: Long = -1L
+    // O tipo agora é List<ArtigoItem> diretamente
     private val artigosList = mutableListOf<ArtigoItem>()
+    // O tipo agora é List<String> diretamente
     private val notasList = mutableListOf<String>()
     private val fotosList = mutableListOf<String>()
     private lateinit var artigoAdapter: ArtigoAdapter
@@ -155,24 +157,30 @@ class SecondScreenActivity : AppCompatActivity() {
                 taxaEntrega = fatura.taxaEntrega ?: 0.0
                 faturaEnviadaSucesso = fatura.foiEnviada == 1
 
-                val artigosDaFatura = fatura.artigos?.split("|")?.mapNotNull {
-                    val parts = it.split(",")
-                    if (parts.size >= 6) ArtigoItem(parts[0].toLongOrNull() ?: 0L, parts[1], parts[2].toInt(), parts[3].toDouble(), parts[4], parts[5]) else null
-                } ?: emptyList()
-
+                // Artigos já vêm como List<ArtigoItem> do ViewModel
                 artigosList.clear()
-                artigosList.addAll(artigosDaFatura)
+                fatura.artigos?.let { articles ->
+                    artigosList.addAll(articles)
+                }
                 artigoAdapter.notifyDataSetChanged()
+
+                // Notas já vêm como List<String> do ViewModel
+                notasList.clear()
+                fatura.notas?.let { notes ->
+                    notasList.addAll(notes)
+                }
+                notaAdapter.notifyDataSetChanged()
 
                 updateSubtotal()
             }
         }
 
-        viewModel.notasDaFatura.observe(this) { notas ->
-            notasList.clear()
-            notasList.addAll(notas)
-            notaAdapter.notifyDataSetChanged()
-        }
+        // Não é mais necessário um LiveData separado para notas, pois ele vem na fatura
+        // viewModel.notasDaFatura.observe(this) { notas ->
+        //     notasList.clear()
+        //     notasList.addAll(notas)
+        //     notaAdapter.notifyDataSetChanged()
+        // }
 
         viewModel.faturaSalvaId.observe(this) { id ->
             id?.let {
@@ -239,14 +247,16 @@ class SecondScreenActivity : AppCompatActivity() {
             id = faturaId.takeIf { it != -1L } ?: 0L,
             numeroFatura = binding.invoiceNumberTextView.text.toString(),
             cliente = nomeClienteSalvo,
-            artigos = artigosList.joinToString(separator = "|") { "${it.id},${it.nome},${it.quantidade},${it.preco},${it.numeroSerial},${it.descricao}" },
-            subtotal = artigosList.sumOf { it.preco },
+            // Agora passa a lista de ArtigoItem diretamente
+            artigos = artigosList,
+            subtotal = artigosList.sumOf { it.preco ?: 0.0 }, // Use sumOf para Double
             desconto = desconto,
             descontoPercent = if(isPercentDesconto) 1 else 0,
             taxaEntrega = taxaEntrega,
-            saldoDevedor = artigosList.sumOf { it.preco } - descontoValor + taxaEntrega,
+            saldoDevedor = artigosList.sumOf { it.preco ?: 0.0 } - descontoValor + taxaEntrega,
             data = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date()),
-            notas = notasList.joinToString("|"),
+            // Agora passa a lista de String diretamente
+            notas = notasList,
             foiEnviada = if (faturaEnviadaSucesso) 1 else 0,
             fotosImpressora = null // Obsoleto
         )
@@ -274,7 +284,7 @@ class SecondScreenActivity : AppCompatActivity() {
                     isFaturaSaved = false
                 }
             }
-            CRIAR_NOVO_ARTIGO_REQUEST_CODE, ARQUIVOS_RECENTES_REQUEST_CODE -> {
+            CRIAR_NEW_ARTIGO_REQUEST_CODE, ARQUIVOS_RECENTES_REQUEST_CODE -> {
                 data?.let {
                     val artigo = ArtigoItem(
                         id = it.getLongExtra("artigo_id", 0L),
@@ -324,13 +334,14 @@ class SecondScreenActivity : AppCompatActivity() {
     private fun loadNotasPadraoParaNovaFatura() {
         val savedNotasPadrao = notasPadraoPreferences.getString("notas", "")
         if (!savedNotasPadrao.isNullOrEmpty()) {
+            // Se as notas padrão forem uma string multilinha, divida-as em uma lista
             notasList.addAll(savedNotasPadrao.split("\n").filter { it.isNotEmpty() })
             notaAdapter.notifyDataSetChanged()
         }
     }
 
     private fun updateSubtotal() {
-        val baseSubtotal = artigosList.sumOf { it.preco }
+        val baseSubtotal = artigosList.sumOf { it.preco ?: 0.0 }
         binding.subtotalValueTextViewSecondScreen.text = decimalFormat.format(baseSubtotal)
         descontoValor = if (isPercentDesconto) (baseSubtotal * desconto) / 100.0 else desconto
         val descontoTextoExibicao = if (isPercentDesconto) "${String.format(Locale("pt", "BR"), "%.2f", desconto)}% (${decimalFormat.format(descontoValor)})" else "(${decimalFormat.format(descontoValor)})"

@@ -31,14 +31,14 @@ class MainActivityViewModel(application: Application) : AndroidViewModel(applica
             faturaOriginalId = faturaCompleta.id,
             numeroFatura = faturaCompleta.numeroFatura,
             cliente = faturaCompleta.cliente,
-            artigos = faturaCompleta.artigos,
+            artigos = faturaCompleta.artigos, // Passa a lista diretamente
             subtotal = faturaCompleta.subtotal,
             desconto = faturaCompleta.desconto,
             descontoPercent = faturaCompleta.descontoPercent,
             taxaEntrega = faturaCompleta.taxaEntrega,
             saldoDevedor = faturaCompleta.saldoDevedor,
             data = faturaCompleta.data,
-            notas = faturaCompleta.notas,
+            notas = faturaCompleta.notas, // Passa a lista diretamente
             fotosImpressora = faturaCompleta.fotosImpressora,
             dataDelecao = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
         )
@@ -69,13 +69,9 @@ class MainActivityViewModel(application: Application) : AndroidViewModel(applica
         )
     }
 
-    private fun extrairSeriais(artigosString: String?): List<String?> {
-        if (artigosString.isNullOrEmpty()) return emptyList()
-        return artigosString.split("|").mapNotNull { artigoData ->
-            val parts = artigoData.split(",")
-            if (parts.size >= 5) parts[4].takeIf { it.isNotBlank() && it.lowercase(Locale.ROOT) != "null" }
-            else null
-        }
+    // Adaptação para extrair seriais de List<ArtigoItem>
+    private fun extrairSeriais(artigosList: List<ArtigoItem>?): List<String?> {
+        return artigosList?.mapNotNull { it.numeroSerial?.takeIf { s -> s.isNotBlank() && s.lowercase(Locale.ROOT) != "null" } } ?: emptyList()
     }
 
     private fun formatarData(dataDb: String?): String {
