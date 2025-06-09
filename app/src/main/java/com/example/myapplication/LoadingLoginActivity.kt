@@ -2,6 +2,7 @@ package com.example.myapplication
 
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import android.view.animation.Animation
 import android.view.animation.AnimationUtils
 import android.widget.ImageView
@@ -50,19 +51,24 @@ class LoadingLoginActivity : AppCompatActivity() {
             var initializationFailed = false
             withContext(Dispatchers.IO) {
                 try {
-                    // CORRIGIDO: Apenas acessar o banco já força a sua inicialização.
-                    AppDatabase.getDatabase(applicationContext).faturaDao()
+                    // Força a inicialização do banco de dados
+                    Log.d("LoadingLogin", "Tentando inicializar o banco de dados...")
+                    AppDatabase.getDatabase(applicationContext).faturaDao().getAllFaturas()
+                    Log.d("LoadingLogin", "Banco de dados inicializado com sucesso.")
                 } catch (e: Exception) {
                     initializationFailed = true
+                    // Log detalhado do erro
+                    Log.e("LoadingLogin", "Erro CRÍTICO ao inicializar o banco de dados.", e)
                     withContext(Dispatchers.Main) {
-                        Toast.makeText(this@LoadingLoginActivity, "Erro crítico ao inicializar o banco de dados.", Toast.LENGTH_LONG).show()
+                        Toast.makeText(this@LoadingLoginActivity, "Erro fatal no DB: ${e.message}", Toast.LENGTH_LONG).show()
                     }
                 }
             }
 
             if (initializationFailed) {
-                delay(2000L)
-                finishAffinity()
+                // Mantém a tela por um tempo para o usuário ver a mensagem de erro antes de fechar.
+                delay(4000L)
+                finishAffinity() // Fecha completamente o app
                 return@launch
             }
 
