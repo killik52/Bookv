@@ -1,127 +1,85 @@
-package com.example.myapplication.data
+package data
 
-import android.app.Application
-import com.example.myapplication.data.model.*
+import android.content.Context
+import com.example.myapplication.data.AppDatabase // Adicione esta linha
 import com.google.gson.Gson
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.withContext
-import java.io.InputStream
-import java.io.OutputStream
-import java.nio.charset.StandardCharsets
+import com.google.gson.GsonBuilder
+import java.io.File
+import java.io.FileReader
+import java.io.FileWriter
 
-class DatabaseBackup(private val application: Application) {
+class DatabaseBackup(private val db: AppDatabase) {
 
-    private val db = AppDatabase.getDatabase(application)
-    private val gson = Gson()
+    private val gson: Gson = GsonBuilder().setPrettyPrinting().create()
 
-    suspend fun exportDatabaseToJson(outputStream: OutputStream) = withContext(Dispatchers.IO) {
-        val faturas = db.faturaDao().getAllFaturas().first()
-        val clientes = db.clienteDao().getAll().first()
-        val artigos = db.artigoDao().getAll().first()
-        val faturaItems = faturas.flatMap { fatura -> db.faturaDao().getFaturaWithDetails(fatura.id)?.artigos ?: emptyList() }
-        val faturaNotas = faturas.flatMap { fatura -> db.faturaDao().getFaturaWithDetails(fatura.id)?.notas ?: emptyList() }
-        val faturaFotos = faturas.flatMap { fatura -> db.faturaDao().getFaturaWithDetails(fatura.id)?.fotos ?: emptyList() }
+    // Backup de todas as tabelas para um único arquivo JSON
+    suspend fun backup(outputFile: File) {
+        val allData = mutableMapOf<String, Any>()
 
-        val data = mapOf(
-            "faturas" to faturas,
-            "clientes" to clientes,
-            "artigos" to artigos,
-            "fatura_itens" to faturaItems,
-            "fatura_notas" to faturaNotas,
-            "fatura_fotos" to faturaFotos
-        )
-        outputStream.use { it.write(toJson(data).toByteArray(StandardCharsets.UTF_8)) }
+        // Adaptações para Listas para GSON
+        val clientes = db.clienteDao().getAllClientesList()
+        val artigos = db.artigoDao().getAllArtigosList()
+        val faturas = db.faturaDao().getAllFaturasWithDetailsList()
+        val faturaItems = db.faturaDao().getAllFaturaItemsList()
+        val faturaNotas = db.faturaNotaDao().getAllNotesList()
+        val faturaLixeira = db.lixeiraDao().getAllFaturasLixeiraList()
+
+        allData["clientes"] = clientes
+        allData["artigos"] = artigos
+        allData["faturas"] = faturas
+        allData["faturaItems"] = faturaItems
+        allData["faturaNotas"] = faturaNotas
+        allData["faturaLixeira"] = faturaLixeira
+
+        FileWriter(outputFile).use { writer ->
+            gson.toJson(allData, writer)
+        }
     }
 
-    suspend fun importDatabaseFromJson(inputStream: InputStream) = withContext(Dispatchers.IO) {
-        val json = inputStream.bufferedReader(StandardCharsets.UTF_8).use { it.readText() }
-        val data = gson.fromJson(json, Map::class.java)
+    // Restaura o banco de dados a partir de um arquivo JSON
+    suspend fun restore(inputFile: File) {
+        FileReader(inputFile).use { reader ->
+            val allData = gson.fromJson(reader, MutableMap::class.java) as Map<String, List<Map<String, Any>>>
 
-        val faturas = (data["faturas"] as? List<Map<String, Any>>)?.map {
-            Fatura(
-                id = (it["id"] as? Double)?.toLong() ?: 0,
-                numeroFatura = it["numero_fatura"] as? String,
-                cliente = it["cliente"] as? String,
-                clienteId = (it["cliente_id"] as? Double)?.toLong(),
-                subtotal = it["subtotal"] as? Double,
-                desconto = it["desconto"] as? Double,
-                descontoPercent = (it["desconto_percent"] as? Double)?.toInt(),
-                taxaEntrega = it["taxa_entrega"] as? Double,
-                saldoDevedor = it["saldo_devedor"] as? Double,
-                data = it["data"] as? String,
-                foiEnviada = (it["foi_enviada"] as? Double)?.toInt() ?: 0
-            )
-        } ?: emptyList()
+            db.clearAllTables() // Limpar todas as tabelas antes de restaurar
 
-        val clientes = (data["clientes"] as? List<Map<String, Any>>)?.map {
-            Cliente(
-                id = (it["id"] as? Double)?.toLong() ?: 0,
-                nome = it["nome"] as? String,
-                email = it["email"] as? String,
-                telefone = it["telefone"] as? String,
-                informacoesAdicionais = it["informacoes_adicionais"] as? String,
-                cpf = it["cpf"] as? String,
-                cnpj = it["cnpj"] as? String,
-                logradouro = it["logradouro"] as? String,
-                numero = it["numero"] as? String,
-                complemento = it["complemento"] as? String,
-                bairro = it["bairro"] as? String,
-                municipio = it["municipio"] as? String,
-                uf = it["uf"] as? String,
-                cep = it["cep"] as? String,
-                numeroSerial = it["numero_serial"] as? String
-            )
-        } ?: emptyList()
+            // Restaurar clientes
+            (allData["clientes"] as? List<Map<String, Any>>)?.forEach { clienteMap ->
+                val cliente = gson.fromJson(gson.toJson(clienteMap), Cliente::class.java)
+                db.clienteDao().insert(cliente)
+            }
 
-        val artigos = (data["artigos"] as? List<Map<String, Any>>)?.map {
-            Artigo(
-                id = (it["id"] as? Double)?.toLong() ?: 0,
-                nome = it["nome"] as? String,
-                preco = it["preco"] as? Double,
-                quantidade = (it["quantidade"] as? Double)?.toInt(),
-                desconto = it["desconto"] as? Double,
-                descricao = it["descricao"] as? String,
-                guardarFatura = (it["guardar_fatura"] as? Double)?.toInt(),
-                numeroSerial = it["numero_serial"] as? String
-            )
-        } ?: emptyList()
+            // Restaurar artigos
+            (allData["artigos"] as? List<Map<String, Any>>)?.forEach { artigoMap ->
+                val artigo = gson.fromJson(gson.toJson(artigoMap), Artigo::class.java)
+                db.artigoDao().insert(artigo)
+            }
 
-        val faturaItems = (data["fatura_itens"] as? List<Map<String, Any>>)?.map {
-            FaturaItem(
-                id = (it["id"] as? Double)?.toLong() ?: 0,
-                faturaId = (it["fatura_id"] as? Double)?.toLong(),
-                artigoId = (it["artigo_id"] as? Double)?.toLong(),
-                quantidade = (it["quantidade"] as? Double)?.toInt(),
-                preco = it["preco"] as? Double,
-                clienteId = (it["cliente_id"] as? Double)?.toLong()
-            )
-        } ?: emptyList()
+            // Restaurar faturas (e seus itens e notas, se estiverem incluídos no backup principal)
+            // IMPORTANTE: A ordem de restauração é crucial devido às chaves estrangeiras.
+            // Faturas devem ser restauradas antes de faturaItems e faturaNotas.
+            (allData["faturas"] as? List<Map<String, Any>>)?.forEach { faturaMap ->
+                val fatura = gson.fromJson(gson.toJson(furaMap), Fatura::class.java)
+                db.faturaDao().insert(fatura)
+            }
 
-        val faturaNotas = (data["fatura_notas"] as? List<Map<String, Any>>)?.map {
-            FaturaNota(
-                id = (it["id"] as? Double)?.toLong() ?: 0,
-                faturaId = (it["fatura_id"] as? Double)?.toLong() ?: 0,
-                noteContent = it["note_content"] as? String ?: ""
-            )
-        } ?: emptyList()
+            // Restaurar itens da fatura
+            (allData["faturaItems"] as? List<Map<String, Any>>)?.forEach { itemMap ->
+                val item = gson.fromJson(gson.toJson(itemMap), FaturaItem::class.java)
+                db.faturaDao().insertFaturaItem(item)
+            }
 
-        val faturaFotos = (data["fatura_fotos"] as? List<Map<String, Any>>)?.map {
-            FaturaFoto(
-                id = (it["id"] as? Double)?.toLong() ?: 0,
-                faturaId = (it["fatura_id"] as? Double)?.toLong() ?: 0,
-                photoPath = it["photo_path"] as? String
-            )
-        } ?: emptyList()
+            // Restaurar notas da fatura
+            (allData["faturaNotas"] as? List<Map<String, Any>>)?.forEach { notaMap ->
+                val nota = gson.fromJson(gson.toJson(notaMap), FaturaNota::class.java)
+                db.faturaNotaDao().insert(nota)
+            }
 
-        // Inserir dados no banco
-        clientes.forEach { db.clienteDao().insert(it) }
-        artigos.forEach { db.artigoDao().insert(it) }
-        faturas.forEach { db.faturaDao().insertFatura(it) }
-        faturaItems.forEach { db.faturaDao().insertFaturaItem(it) }
-        faturaNotas.forEach { db.faturaNotaDao().insert(it) }
-        faturaFotos.forEach { db.faturaDao().insertFaturaFoto(it) }
+            // Restaurar lixeira de faturas
+            (allData["faturaLixeira"] as? List<Map<String, Any>>)?.forEach { lixeiraMap ->
+                val lixeiraItem = gson.fromJson(gson.toJson(lixeiraMap), FaturaLixeira::class.java)
+                db.lixeiraDao().insert(lixeiraItem)
+            }
+        }
     }
-
-    private fun toJson(data: Any): String = gson.toJson(data)
 }

@@ -2,431 +2,285 @@ package com.example.myapplication
 
 import android.app.Activity
 import android.content.Intent
-import android.content.SharedPreferences
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.Paint
-import android.graphics.PorterDuff
-import android.graphics.PorterDuffXfermode
-import android.graphics.RectF
-import android.graphics.Typeface
-import android.graphics.pdf.PdfDocument
-import android.net.Uri
 import android.os.Bundle
-import android.os.Environment
-import android.text.Layout
-import android.text.StaticLayout
-import android.text.TextPaint
-import android.util.Log
-import android.view.KeyEvent
-import android.view.View
+import android.text.Editable
+import android.text.TextWatcher
+import android.widget.ArrayAdapter
+import android.widget.AutoCompleteTextView
 import android.widget.Button
 import android.widget.EditText
+import android.widget.ImageView
+import android.widget.Spinner
+import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.content.FileProvider
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.lifecycleScope
-import androidx.recyclerview.widget.ItemTouchHelper
+import androidx.lifecycle.Observer // Importe Observer
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.myapplication.data.AppDatabase
-import com.example.myapplication.data.model.Cliente
+import com.example.myapplication.data.model.Artigo
 import com.example.myapplication.data.model.Fatura
-import com.example.myapplication.databinding.ActivitySecondScreenBinding
-import com.google.zxing.BarcodeFormat
-import com.google.zxing.MultiFormatWriter
-import com.google.zxing.common.BitMatrix
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.io.File
-import java.io.FileOutputStream
-import java.io.IOException
-import java.text.DecimalFormat
-import java.text.DecimalFormatSymbols
+import com.example.myapplication.data.model.FaturaItem
+import com.example.myapplication.data.model.FaturaNota // Importe FaturaNota
+import com.google.android.material.datepicker.MaterialDatePicker
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 class SecondScreenActivity : AppCompatActivity() {
 
-    private lateinit var binding: ActivitySecondScreenBinding
+    private lateinit var textViewIdFatura: TextView
+    private lateinit var editTextCliente: AutoCompleteTextView
+    private lateinit var editTextData: EditText
+    private lateinit var spinnerStatus: Spinner
+    private lateinit var recyclerViewItensFatura: RecyclerView
+    private lateinit var buttonAdicionarItem: Button
+    private lateinit var buttonSalvarFatura: Button
+    private lateinit var textViewTotalFatura: TextView
+    private lateinit var imageViewGallery: ImageView
+    private lateinit var imageViewCamera: ImageView
+    private lateinit var imageViewSend: ImageView
+    private lateinit var imageViewAddNote: ImageView
+
     private val viewModel: SecondScreenViewModel by viewModels()
 
-    private var nomeClienteSalvo: String? = null
-    private var clienteIdSalvo: Long = -1L
-    private val artigosList = mutableListOf<ArtigoItem>()
-    private val notasList = mutableListOf<String>()
-    private val fotosList = mutableListOf<String>()
-    private lateinit var artigoAdapter: ArtigoAdapter
-    private lateinit var notaAdapter: NotaAdapter
+    private lateinit var faturaItemAdapter: FaturaItemAdapter
 
-    private val ADICIONAR_CLIENTE_REQUEST_CODE = 123
-    private val ARQUIVOS_RECENTES_REQUEST_CODE = 791
-    private val CRIAR_NOVO_ARTIGO_REQUEST_CODE = 792
-    private val THIRD_SCREEN_REQUEST_CODE = 456
-    private val GALERIA_FOTOS_REQUEST_CODE = 789
+    private var selectedDateMillis: Long = System.currentTimeMillis()
 
-    private val decimalFormat = DecimalFormat("R$ #,##0.00", DecimalFormatSymbols(Locale("pt", "BR")))
-    private var desconto: Double = 0.0
-    private var isPercentDesconto: Boolean = false
-    private var taxaEntrega: Double = 0.0
-    private var descontoValor: Double = 0.0
-    private var faturaId: Long = -1L
-    private var isFaturaSaved: Boolean = false
-    private var faturaEnviadaSucesso: Boolean = false
-    private lateinit var sharedPreferences: SharedPreferences
-    private lateinit var notasPadraoPreferences: SharedPreferences
-    private lateinit var faturaPrefs: SharedPreferences
-    private val db by lazy { AppDatabase.getDatabase(this) }
+    // ActivityResultLauncher para CriarNovoArtigoActivity
+    private val createArtigoLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val data = result.data
+            val artigoId = data?.getIntExtra("artigo_id", -1)
+            val nomeArtigo = data?.getStringExtra("nome_artigo")
+            val quantidade = data?.getIntExtra("quantidade", 1)
+            val valor = data?.getDoubleExtra("valor", 0.0)
+            val numeroSerial = data?.getStringExtra("numero_serial")
+            val descricao = data?.getStringExtra("descricao")
+
+            if (artigoId != -1 && nomeArtigo != null && quantidade != null && valor != null) {
+                val currentClienteId = viewModel.selectedCliente.value?.id ?: 0
+
+                val newItem = FaturaItem(
+                    id = 0,
+                    fatura_id = viewModel.currentFaturaId.value ?: 0,
+                    artigo_id = artigoId,
+                    cliente_id = currentClienteId,
+                    quantidade = quantidade,
+                    preco = valor / quantidade
+                )
+                faturaItemAdapter.addItem(newItem)
+                updateTotalFatura()
+            }
+        }
+    }
+
+    // ActivityResultLauncher para GaleriaFotosActivity
+    private val galleryLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val data = result.data
+            val imagePath = data?.getStringExtra("image_path")
+            imagePath?.let {
+                Toast.makeText(this, "Foto selecionada: $it", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        binding = ActivitySecondScreenBinding.inflate(layoutInflater)
-        setContentView(binding.root)
-        Log.d("SecondScreen", "onCreate chamado")
+        setContentView(R.layout.activity_second_screen)
 
-        sharedPreferences = getSharedPreferences("InformacoesEmpresaPrefs", MODE_PRIVATE)
-        notasPadraoPreferences = getSharedPreferences("NotasPrefs", MODE_PRIVATE)
-        faturaPrefs = getSharedPreferences("FaturaPrefs", MODE_PRIVATE)
+        textViewIdFatura = findViewById(R.id.textViewIdFatura)
+        editTextCliente = findViewById(R.id.editTextCliente)
+        editTextData = findViewById(R.id.editTextData)
+        spinnerStatus = findViewById(R.id.spinnerStatus)
+        recyclerViewItensFatura = findViewById(R.id.recyclerViewItensFatura)
+        buttonAdicionarItem = findViewById(R.id.buttonAdicionarItem)
+        buttonSalvarFatura = findViewById(R.id.buttonSalvarFatura)
+        textViewTotalFatura = findViewById(R.id.textViewTotalFatura)
+        imageViewGallery = findViewById(R.id.imageViewGallery)
+        imageViewCamera = findViewById(R.id.imageViewCamera)
+        imageViewSend = findViewById(R.id.imageViewSend)
+        imageViewAddNote = findViewById(R.id.imageViewAddNote)
 
-        faturaId = intent.getLongExtra("fatura_id", -1L)
-
-        setupUI()
+        setupAdapters()
+        setupListeners()
         observeViewModel()
 
-        if (savedInstanceState == null) {
-            if (faturaId != -1L) {
-                viewModel.carregarFatura(faturaId)
-            } else {
-                val lastFaturaNumber = faturaPrefs.getInt("last_fatura_number", 0) + 1
-                binding.invoiceNumberTextView.text = "#${lastFaturaNumber.toString().padStart(4, '0')}"
-                updateCurrentDate()
-                loadNotasPadraoParaNovaFatura()
-            }
+        val faturaId = intent.getIntExtra("fatura_id", -1)
+        if (faturaId != -1) {
+            viewModel.loadFatura(faturaId)
+        } else {
+            val currentDate = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date())
+            editTextData.setText(currentDate)
         }
     }
 
-    private fun setupUI() {
-        binding.dateTextViewSecondScreen.text = SimpleDateFormat("dd MMM yy", Locale("pt", "BR")).format(Date())
-
-        artigoAdapter = ArtigoAdapter(this, artigosList, { pos -> }, { pos -> }, { pos -> onArtigoLongPressed(pos) })
-        binding.artigosRecyclerViewSecondScreen.layoutManager = LinearLayoutManager(this)
-        binding.artigosRecyclerViewSecondScreen.adapter = artigoAdapter
-
-        notaAdapter = NotaAdapter(notasList) { position ->
-            notaAdapter.removeNota(position)
-            showToast("Nota removida")
-            isFaturaSaved = false
+    private fun setupAdapters() {
+        ArrayAdapter.createFromResource(
+            this,
+            R.array.status_array,
+            android.R.layout.simple_spinner_item
+        ).also { adapter ->
+            adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+            spinnerStatus.adapter = adapter
         }
-        binding.notasRecyclerView.layoutManager = LinearLayoutManager(this)
-        binding.notasRecyclerView.adapter = notaAdapter
 
-        setupListeners()
-    }
+        faturaItemAdapter = FaturaItemAdapter(mutableListOf()) { faturaItem ->
+            Toast.makeText(this, "Item ${faturaItem.id} clicado!", Toast.LENGTH_SHORT).show()
+        }
+        recyclerViewItensFatura.layoutManager = LinearLayoutManager(this)
+        recyclerViewItensFatura.adapter = faturaItemAdapter
 
-    private fun onArtigoLongPressed(position: Int) {
-        artigosList.removeAt(position)
-        artigoAdapter.notifyItemRemoved(position)
-        artigoAdapter.notifyItemRangeChanged(position, artigosList.size - position)
-        showToast("Artigo removido")
-        updateSubtotal()
-        isFaturaSaved = false
-    }
+        val clientesAdapter = ArrayAdapter<String>(this, android.R.layout.simple_dropdown_item_1line)
+        editTextCliente.setAdapter(clientesAdapter)
 
-    private fun observeViewModel() {
-        viewModel.cliente.observe(this) { cliente ->
-            if (cliente != null) {
-                nomeClienteSalvo = cliente.nome
-                clienteIdSalvo = cliente.id
-                atualizarTopAdicionarClienteComNome()
+        viewModel.clientes.observe(this, Observer { clientes -> // Use Observer explícito
+            clientes?.let {
+                clientesAdapter.clear()
+                clientesAdapter.addAll(it.map { cliente -> cliente.nome })
+                clientesAdapter.notifyDataSetChanged()
             }
-        }
-
-        viewModel.fatura.observe(this) { fatura ->
-            if (fatura != null) {
-                isFaturaSaved = true
-                binding.invoiceNumberTextView.text = fatura.numeroFatura
-                desconto = fatura.desconto ?: 0.0
-                isPercentDesconto = fatura.descontoPercent == 1
-                taxaEntrega = fatura.taxaEntrega ?: 0.0
-                faturaEnviadaSucesso = fatura.foiEnviada == 1
-
-                viewModel.itensDaFatura.observe(this) { itens ->
-                    lifecycleScope.launch {
-                        artigosList.clear()
-                        itens?.forEach { item ->
-                            val artigoNome = item.artigoId?.let {
-                                withContext(Dispatchers.IO) {
-                                    db.artigoDao().getById(it)?.nome ?: "Desconhecido"
-                                }
-                            } ?: "Desconhecido"
-                            val artigo = ArtigoItem(
-                                id = item.artigoId ?: 0L,
-                                nome = artigoNome,
-                                quantidade = item.quantidade ?: 1,
-                                preco = item.preco ?: 0.0,
-                                numeroSerial = null,
-                                descricao = null
-                            )
-                            artigosList.add(artigo)
-                        }
-                        withContext(Dispatchers.Main) {
-                            artigoAdapter.notifyDataSetChanged()
-                            updateSubtotal()
-                        }
-                    }
-                }
-            }
-        }
-
-        viewModel.notasDaFatura.observe(this) { notas ->
-            notasList.clear()
-            notasList.addAll(notas)
-            notaAdapter.notifyDataSetChanged()
-        }
-
-        viewModel.faturaSalvaId.observe(this) { id ->
-            id?.let {
-                faturaId = it
-                isFaturaSaved = true
-                showToast("Fatura salva com sucesso!")
-                viewModel.onSaveComplete()
-                finish()
-            }
-        }
+        })
     }
 
     private fun setupListeners() {
-        binding.backButtonSecondScreen.setOnClickListener { trySaveAndExit() }
-        binding.saveTextViewSecondScreen.setOnClickListener { saveFatura() }
-        binding.topAdicionarClienteTextViewSecondScreen.setOnClickListener {
-            val intent = if (clienteIdSalvo != -1L) {
-                Intent(this, ClienteActivity::class.java).putExtra("id", clienteIdSalvo)
-            } else {
-                Intent(this, AdicionarClienteActivity::class.java)
-            }
-            startActivityForResult(intent, ADICIONAR_CLIENTE_REQUEST_CODE)
-        }
-        binding.adicionarArtigoContainerSecondScreen.setOnClickListener {
-            val intent = Intent(this, ArquivosRecentesActivity::class.java)
-            startActivityForResult(intent, ARQUIVOS_RECENTES_REQUEST_CODE)
-        }
-        binding.adicionarNotaContainer.setOnClickListener { showAddNotaDialog() }
-        binding.gerImageButtonSecondScreen.setOnClickListener {
-            val intent = Intent(this, ThirdScreenActivity::class.java).apply {
-                putExtra("desconto", desconto)
-                putExtra("isPercentDesconto", isPercentDesconto)
-                putExtra("taxaEntrega", taxaEntrega)
-            }
-            startActivityForResult(intent, THIRD_SCREEN_REQUEST_CODE)
-        }
-        binding.viewIcon.setOnClickListener {
-            generatePDF()?.let { viewPDF(it) }
+        editTextData.setOnClickListener {
+            showDatePicker()
         }
 
-        binding.sendIcon.setOnClickListener {
-            generatePDF()?.let { file ->
-                sharePDF(file) { sucesso ->
-                    if (sucesso && faturaId != -1L) {
-                        viewModel.marcarFaturaComoEnviada(faturaId)
-                        faturaEnviadaSucesso = true
-                    }
-                }
+        buttonAdicionarItem.setOnClickListener {
+            val intent = Intent(this, ArquivosRecentesActivity::class.java)
+            createArtigoLauncher.launch(intent)
+        }
+
+        buttonSalvarFatura.setOnClickListener {
+            saveFatura()
+        }
+
+        faturaItemAdapter.setOnItemRemovedListener {
+            updateTotalFatura()
+        }
+
+        imageViewGallery.setOnClickListener {
+            val intent = Intent(this, GaleriaFotosActivity::class.java)
+            intent.putExtra("fatura_id", viewModel.currentFaturaId.value)
+            galleryLauncher.launch(intent)
+        }
+
+        imageViewCamera.setOnClickListener {
+            Toast.makeText(this, "Funcionalidade de Câmera em desenvolvimento", Toast.LENGTH_SHORT).show()
+        }
+
+        imageViewSend.setOnClickListener {
+            Toast.makeText(this, "Funcionalidade de Envio em desenvolvimento", Toast.LENGTH_SHORT).show()
+        }
+
+        imageViewAddNote.setOnClickListener {
+            val faturaId = viewModel.currentFaturaId.value
+            if (faturaId != null && faturaId != 0) {
+                showAddNoteDialog(faturaId)
+            } else {
+                Toast.makeText(this, "Salve a fatura primeiro para adicionar notas.", Toast.LENGTH_SHORT).show()
             }
         }
+    }
+
+    private fun observeViewModel() {
+        viewModel.faturaWithDetails.observe(this, Observer { faturaWithDetails -> // Use Observer explícito
+            faturaWithDetails?.let {
+                textViewIdFatura.text = "Fatura ID: ${it.fatura.id}"
+                editTextCliente.setText(it.cliente?.nome, false)
+                editTextData.setText(SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date(it.fatura.dataEmissao)))
+                spinnerStatus.setSelection(resources.getStringArray(R.array.status_array).indexOf(it.fatura.status))
+                faturaItemAdapter.updateItems(it.items.toMutableList())
+                updateTotalFatura()
+                viewModel.currentFaturaId.value = it.fatura.id
+            }
+        })
+    }
+
+    private fun showDatePicker() {
+        val datePicker = MaterialDatePicker.Builder.datePicker()
+            .setTitleText("Selecione a data da fatura")
+            .setSelection(selectedDateMillis)
+            .build()
+
+        datePicker.addOnPositiveButtonClickListener { selection ->
+            selectedDateMillis = selection
+            val formattedDate = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date(selection))
+            editTextData.setText(formattedDate)
+        }
+        datePicker.show(supportFragmentManager, "DATE_PICKER")
+    }
+
+    private fun updateTotalFatura() {
+        val total = faturaItemAdapter.items.sumOf { it.quantidade * it.preco }
+        val format = NumberFormat.getCurrencyInstance(Locale("pt", "BR"))
+        textViewTotalFatura.text = "Total: ${format.format(total)}"
     }
 
     private fun saveFatura() {
-        if (nomeClienteSalvo.isNullOrEmpty()) {
-            showToast("O nome do cliente é obrigatório.")
-            return
-        }
-        if (artigosList.isEmpty()) {
-            showToast("Adicione pelo menos um artigo.")
+        val clienteNome = editTextCliente.text.toString()
+        val dataEmissao = selectedDateMillis
+        val status = spinnerStatus.selectedItem.toString()
+        val valorTotal = faturaItemAdapter.items.sumOf { it.quantidade * it.preco }
+
+        if (clienteNome.isBlank()) {
+            Toast.makeText(this, "Selecione um cliente!", Toast.LENGTH_SHORT).show()
             return
         }
 
-        val faturaParaSalvar = Fatura(
-            id = faturaId.takeIf { it != -1L } ?: 0L,
-            numeroFatura = binding.invoiceNumberTextView.text.toString(),
-            cliente = nomeClienteSalvo,
-            clienteId = clienteIdSalvo.takeIf { it != -1L },
-            subtotal = artigosList.sumOf { it.preco },
-            desconto = desconto,
-            descontoPercent = if (isPercentDesconto) 1 else 0,
-            taxaEntrega = taxaEntrega,
-            saldoDevedor = artigosList.sumOf { it.preco } - descontoValor + taxaEntrega,
-            data = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date()),
-            foiEnviada = if (faturaEnviadaSucesso) 1 else 0
+        val clienteSelecionado = viewModel.clientes.value?.find { it.nome == clienteNome }
+        if (clienteSelecionado == null) {
+            Toast.makeText(this, "Cliente não encontrado. Selecione um cliente da lista.", Toast.LENGTH_LONG).show()
+            return
+        }
+
+        val fatura = Fatura(
+            id = viewModel.currentFaturaId.value ?: 0,
+            clienteId = clienteSelecionado.id,
+            dataEmissao = dataEmissao,
+            valorTotal = valorTotal,
+            status = status,
+            caminhoArquivo = null,
+            tipo = "Normal"
         )
 
-        viewModel.salvarFaturaCompleta(faturaParaSalvar, artigosList, notasList, fotosList)
+        val faturaItems = faturaItemAdapter.items.map { it.copy(fatura_id = fatura.id) }
+
+        viewModel.saveFaturaWithItems(fatura, faturaItems)
+
+        Toast.makeText(this, "Fatura salva com sucesso!", Toast.LENGTH_SHORT).show()
+        finish()
     }
 
-    private fun trySaveAndExit() {
-        val podeSalvar = !nomeClienteSalvo.isNullOrEmpty() && artigosList.isNotEmpty()
-        if (podeSalvar && !isFaturaSaved) {
-            saveFatura()
-        } else {
-            finish()
-        }
-    }
-
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (resultCode != Activity.RESULT_OK) return
-
-        when (requestCode) {
-            ADICIONAR_CLIENTE_REQUEST_CODE -> {
-                data?.getLongExtra("cliente_id", -1L)?.takeIf { it != -1L }?.let {
-                    viewModel.carregarClientePorId(it)
-                    isFaturaSaved = false
-                }
-            }
-            CRIAR_NOVO_ARTIGO_REQUEST_CODE, ARQUIVOS_RECENTES_REQUEST_CODE -> {
-                data?.let {
-                    val artigo = ArtigoItem(
-                        id = it.getLongExtra("artigo_id", 0L),
-                        nome = it.getStringExtra("nome_artigo") ?: "",
-                        quantidade = it.getIntExtra("quantidade", 1),
-                        preco = it.getDoubleExtra("valor", 0.0),
-                        numeroSerial = it.getStringExtra("numero_serial"),
-                        descricao = it.getStringExtra("descricao")
-                    )
-                    if (artigo.nome.isNotEmpty()) {
-                        artigosList.add(artigo)
-                        artigoAdapter.notifyItemInserted(artigosList.size - 1)
-                        updateSubtotal()
-                        isFaturaSaved = false
-                    }
-                }
-            }
-            THIRD_SCREEN_REQUEST_CODE -> {
-                desconto = data?.getDoubleExtra("desconto", 0.0) ?: 0.0
-                isPercentDesconto = data?.getBooleanExtra("isPercentDesconto", false) ?: false
-                taxaEntrega = data?.getDoubleExtra("taxaEntrega", 0.0) ?: 0.0
-                updateSubtotal()
-                isFaturaSaved = false
-            }
-            GALERIA_FOTOS_REQUEST_CODE -> {
-                data?.getStringArrayListExtra("photos")?.let {
-                    fotosList.clear()
-                    fotosList.addAll(it)
-                    isFaturaSaved = false
-                }
-            }
-        }
-    }
-
-    private fun atualizarTopAdicionarClienteComNome() {
-        binding.topAdicionarClienteTextViewSecondScreen.text = if (!nomeClienteSalvo.isNullOrEmpty()) {
-            nomeClienteSalvo
-        } else {
-            getString(R.string.adicionar_cliente_text)
-        }
-    }
-
-    private fun updateCurrentDate() {
-        binding.dateTextViewSecondScreen.text = SimpleDateFormat("dd MMM yy", Locale("pt", "BR")).format(Date())
-    }
-
-    private fun loadNotasPadraoParaNovaFatura() {
-        val savedNotasPadrao = notasPadraoPreferences.getString("notas", "")
-        if (!savedNotasPadrao.isNullOrEmpty()) {
-            notasList.addAll(savedNotasPadrao.split("\n").filter { it.isNotEmpty() })
-            notaAdapter.notifyDataSetChanged()
-        }
-    }
-
-    private fun updateSubtotal() {
-        val baseSubtotal = artigosList.sumOf { it.preco }
-        binding.subtotalValueTextViewSecondScreen.text = decimalFormat.format(baseSubtotal)
-        descontoValor = if (isPercentDesconto) (baseSubtotal * desconto) / 100.0 else desconto
-        val descontoTextoExibicao = if (isPercentDesconto) "${String.format(Locale("pt", "BR"), "%.2f", desconto)}% (${decimalFormat.format(descontoValor)})" else "(${decimalFormat.format(descontoValor)})"
-        binding.descontoValueTextViewSecondScreen.text = descontoTextoExibicao
-        binding.taxaEntregaValueTextViewSecondScreen.text = decimalFormat.format(taxaEntrega)
-        val saldoDevedor = baseSubtotal - descontoValor + taxaEntrega
-        binding.saldoDevedorValueTextView.text = decimalFormat.format(saldoDevedor)
-    }
-
-    private fun showAddNotaDialog() {
+    private fun showAddNoteDialog(faturaId: Int) {
         val dialogView = layoutInflater.inflate(R.layout.dialog_add_nota, null)
-        val editTextNota = dialogView.findViewById<EditText>(R.id.editTextNota)
-        val buttonConfirmarNota = dialogView.findViewById<Button>(R.id.buttonConfirmarNota)
-        val dialog = AlertDialog.Builder(this).setView(dialogView).create()
+        val editTextNoteContent: EditText = dialogView.findViewById(R.id.editTextNoteContent)
+        val buttonSaveNote: Button = dialogView.findViewById(R.id.buttonSaveNote)
 
-        editTextNota.setOnEditorActionListener { _, actionId, event ->
-            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_DONE || (event?.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN)) {
-                buttonConfirmarNota.performClick()
-                true
-            } else false
-        }
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setTitle("Adicionar Nota")
+            .setView(dialogView)
+            .create()
 
-        buttonConfirmarNota.setOnClickListener {
-            val nota = editTextNota.text.toString().trim()
-            if (nota.isNotEmpty()) {
-                notaAdapter.addNota(nota)
-                isFaturaSaved = false
+        buttonSaveNote.setOnClickListener {
+            val noteContent = editTextNoteContent.text.toString().trim()
+            if (noteContent.isNotEmpty()) {
+                viewModel.addNoteToFatura(faturaId, noteContent)
                 dialog.dismiss()
+                Toast.makeText(this, "Nota adicionada com sucesso!", Toast.LENGTH_SHORT).show()
             } else {
-                showToast("A nota não pode estar vazia.")
+                Toast.makeText(this, "A nota não pode estar vazia.", Toast.LENGTH_SHORT).show()
             }
         }
         dialog.show()
-    }
-
-    private fun generatePDF(): File? {
-        if (nomeClienteSalvo.isNullOrEmpty() || artigosList.isEmpty()) {
-            showToast("Cliente e artigos são necessários para gerar o PDF.")
-            return null
-        }
-        showToast("Lógica de geração de PDF a ser implementada com os dados do ViewModel.")
-        return null
-    }
-
-    private fun viewPDF(file: File) {
-        val authority = "${applicationContext.packageName}.fileprovider"
-        val uri = FileProvider.getUriForFile(this, authority, file)
-        val intent = Intent(Intent.ACTION_VIEW, uri).apply {
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            setDataAndType(uri, "application/pdf")
-        }
-        try {
-            startActivity(intent)
-        } catch (e: Exception) {
-            showToast("Nenhum aplicativo para abrir PDF encontrado.")
-        }
-    }
-
-    private fun sharePDF(file: File, onShared: (Boolean) -> Unit) {
-        val authority = "${applicationContext.packageName}.fileprovider"
-        val uri = FileProvider.getUriForFile(this, authority, file)
-        val shareIntent = Intent(Intent.ACTION_SEND).apply {
-            type = "application/pdf"
-            putExtra(Intent.EXTRA_STREAM, uri)
-            putExtra(Intent.EXTRA_SUBJECT, "Fatura ${binding.invoiceNumberTextView.text}")
-        }
-        try {
-            startActivity(Intent.createChooser(shareIntent, "Compartilhar Fatura"))
-            onShared(true)
-        } catch (e: Exception) {
-            showToast("Nenhum aplicativo para compartilhar PDF encontrado.")
-            onShared(false)
-        }
-    }
-
-    override fun onBackPressed() {
-        trySaveAndExit()
-    }
-
-    private fun showToast(message: String) {
-        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
     }
 }

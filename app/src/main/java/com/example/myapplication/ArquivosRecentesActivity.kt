@@ -20,10 +20,8 @@ class ArquivosRecentesActivity : AppCompatActivity() {
     private lateinit var editTextPesquisa: EditText
     private lateinit var textViewNovoArquivo: TextView
 
-    // Usando o ViewModel para acessar os dados
     private val viewModel: ArquivosRecentesViewModel by viewModels()
 
-    // Lista para guardar os artigos carregados do ViewModel
     private var artigosRecentesList: List<Artigo> = listOf()
     private lateinit var adapter: ArrayAdapter<String>
 
@@ -31,12 +29,10 @@ class ArquivosRecentesActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_arquivos_recentes)
 
-        // Inicializando as Views
         listViewArquivosRecentes = findViewById(R.id.listViewArquivosRecentes)
         editTextPesquisa = findViewById(R.id.editTextPesquisa)
         textViewNovoArquivo = findViewById(R.id.textViewNovoArquivo)
 
-        // Configurando o adapter da lista
         adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, mutableListOf<String>())
         listViewArquivosRecentes.adapter = adapter
 
@@ -45,8 +41,7 @@ class ArquivosRecentesActivity : AppCompatActivity() {
     }
 
     private fun setupListeners() {
-        // Listener para clique em um item da lista
-        listViewArquivosRecentes.setOnItemClickListener { _, _, position, _ ->
+        listViewArquivosRecentes.setOnItemClickListener { parent, view, position, id ->
             val nomeSelecionado = adapter.getItem(position)
             val artigoSelecionado = artigosRecentesList.find { it.nome == nomeSelecionado }
 
@@ -65,13 +60,11 @@ class ArquivosRecentesActivity : AppCompatActivity() {
             }
         }
 
-        // Listener para criar um novo artigo
         textViewNovoArquivo.setOnClickListener {
             val intent = Intent(this, CriarNovoArtigoActivity::class.java)
             startActivityForResult(intent, 792)
         }
 
-        // Listener para a barra de pesquisa
         editTextPesquisa.setOnEditorActionListener { _, _, event ->
             if (event != null && event.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN) {
                 filtrarArtigos(editTextPesquisa.text.toString())
@@ -92,10 +85,12 @@ class ArquivosRecentesActivity : AppCompatActivity() {
         val filteredList = if (query.isBlank()) {
             artigosRecentesList
         } else {
-            artigosRecentesList.filter {
-                it.nome?.contains(query, ignoreCase = true) == true ||
-                        it.descricao?.contains(query, ignoreCase = true) == true ||
-                        it.numeroSerial?.contains(query, ignoreCase = true) == true
+            artigosRecentesList.filter { artigo -> // Explicitamente nomear o parâmetro 'artigo'
+                val nomeMatches = artigo.nome?.contains(query, ignoreCase = true) ?: false
+                val descricaoMatches = artigo.descricao?.contains(query, ignoreCase = true) ?: false
+                val serialMatches = artigo.numeroSerial?.contains(query, ignoreCase = true) ?: false
+
+                nomeMatches || descricaoMatches || serialMatches
             }
         }
 
@@ -105,7 +100,6 @@ class ArquivosRecentesActivity : AppCompatActivity() {
         adapter.notifyDataSetChanged()
     }
 
-    // Trata o resultado da tela de criação de novo artigo
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == 792 && resultCode == Activity.RESULT_OK) {

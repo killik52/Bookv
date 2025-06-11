@@ -6,7 +6,8 @@ import java.util.concurrent.Executors
 
 object DatabaseMigrations {
 
-    private val MIGRATION_1_2: Migration = object : Migration(1, 2) {
+    // NENHUM 'private' aqui, pois elas precisam ser acessíveis de fora do objeto.
+    val MIGRATION_1_2: Migration = object : Migration(1, 2) {
         override fun migrate(database: SupportSQLiteDatabase) {
             database.execSQL("""
                 CREATE TABLE IF NOT EXISTS `clientes` (
@@ -23,13 +24,13 @@ object DatabaseMigrations {
         }
     }
 
-    private val MIGRATION_2_3: Migration = object : Migration(2, 3) {
+    val MIGRATION_2_3: Migration = object : Migration(2, 3) {
         override fun migrate(database: SupportSQLiteDatabase) {
             database.execSQL("ALTER TABLE clientes ADD COLUMN bloqueado INTEGER NOT NULL DEFAULT 0")
         }
     }
 
-    private val MIGRATION_3_4: Migration = object : Migration(3, 4) {
+    val MIGRATION_3_4: Migration = object : Migration(3, 4) {
         override fun migrate(database: SupportSQLiteDatabase) {
             // Create the new fatura_items table with correct foreign key constraint
             database.execSQL("""
@@ -88,10 +89,7 @@ object DatabaseMigrations {
         }
     }
 
-    // MIGRATION_4_5: This migration specifically fixes the onDelete action for cliente_id
-    // in fatura_itens and ensures all foreign keys match "ON DELETE CASCADE".
-    // It also handles renaming and copying data as needed to fix schema inconsistencies.
-    private val MIGRATION_4_5: Migration = object : Migration(4, 5) {
+    val MIGRATION_4_5: Migration = object : Migration(4, 5) {
         override fun migrate(database: SupportSQLiteDatabase) {
             // 1. Create a temporary table for fatura_itens with the CORRECT onDelete 'CASCADE'
             database.execSQL("""
@@ -109,7 +107,6 @@ object DatabaseMigrations {
             """)
 
             // 2. Copy data from the old fatura_itens table to the new one
-            // This assumes the columns `id`, `fatura_id`, `artigo_id`, `cliente_id`, `quantidade`, `preco` exist in the old table.
             database.execSQL("""
                 INSERT INTO `fatura_itens_new` (`id`, `fatura_id`, `artigo_id`, `cliente_id`, `quantidade`, `preco`)
                 SELECT `id`, `fatura_id`, `artigo_id`, `cliente_id`, `quantidade`, `preco` FROM `fatura_itens`
@@ -125,11 +122,6 @@ object DatabaseMigrations {
             database.execSQL("CREATE INDEX IF NOT EXISTS `index_fatura_itens_fatura_id` ON `fatura_itens` (`fatura_id`)")
             database.execSQL("CREATE INDEX IF NOT EXISTS `index_fatura_itens_artigo_id` ON `fatura_itens` (`artigo_id`)")
             database.execSQL("CREATE INDEX IF NOT EXISTS `index_fatura_itens_cliente_id` ON `fatura_itens` (`cliente_id`)")
-
-            // Ensure other tables (faturas, artigos, clientes) and their foreign keys are correctly defined in models
-            // and previous migrations, as Room checks the entire schema.
-            // If there were any other inconsistencies reported, they would need similar handling here.
-            // Based on your log, fatura_itens was the main issue reported for version 4 to 5.
         }
     }
 

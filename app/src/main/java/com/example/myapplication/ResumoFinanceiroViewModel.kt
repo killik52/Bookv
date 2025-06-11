@@ -5,70 +5,79 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
-import com.example.myapplication.data.AppDatabase
-import kotlinx.coroutines.flow.collect
+import com.example.myapplication.data.AppDatabase // Adicione esta linha
+import com.example.myapplication.data.model.Fatura
+import com.example.myapplication.data.model.FaturaItem
+import com.example.myapplication.data.model.FaturaWithDetails
+import com.example.myapplication.data.model.ResumoMensalItem
 import kotlinx.coroutines.launch
+import java.util.Calendar
 
 class ResumoFinanceiroViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val faturaDao = AppDatabase.getDatabase(application).faturaDao()
+    private val db = AppDatabase.getDatabase(application) // Obtenha a instância do AppDatabase
 
-    private val _resumoMensal = MutableLiveData<List<ResumoMensalItem>>()
-    val resumoMensal: LiveData<List<ResumoMensalItem>> = _resumoMensal
+    private val _faturasMensais = MutableLiveData<List<ResumoMensalItem>>()
+    val faturasMensais: LiveData<List<ResumoMensalItem>> = _faturasMensais
 
-    private val _resumoCliente = MutableLiveData<List<ResumoClienteItem>>()
-    val resumoCliente: LiveData<List<ResumoClienteItem>> = _resumoCliente
+    init {
+        loadFaturasMensais()
+    }
 
-    private val _resumoArtigo = MutableLiveData<List<ResumoArtigoItem>>()
-    val resumoArtigo: LiveData<List<ResumoArtigoItem>> = _resumoArtigo
-
-    fun carregarFaturamentoMensal(startDate: String?, endDate: String?) = viewModelScope.launch {
-        faturaDao.getFaturasNoPeriodo(startDate, endDate).collect { faturas ->
-            val resumosMap = mutableMapOf<String, ResumoMensalItem>()
-            faturas.forEach { fatura ->
-                val ano = fatura.data?.substring(0, 4)?.toIntOrNull() ?: 0
-                val mes = fatura.data?.substring(5, 7)?.toIntOrNull() ?: 0
-                if (ano != 0 && mes != 0) {
-                    val mesAno = String.format("%02d/%d", mes, ano)
-                    val itemAtual = resumosMap.getOrPut(mesAno) {
-                        ResumoMensalItem(mesAno, 0.0, ano, mes)
-                    }
-                    resumosMap[mesAno] = itemAtual.copy(valorTotal = itemAtual.valorTotal + (fatura.saldoDevedor ?: 0.0))
-                }
+    private fun loadFaturasMensais() {
+        viewModelScope.launch {
+            val allFaturas = db.faturaDao().getAllFaturasWithDetailsList() // Obter todas as faturas com detalhes
+            val groupedByMonth = allFaturas.groupBy {
+                val cal = Calendar.getInstance().apply { timeInMillis = it.fatura.dataEmissao }
+                Pair(cal.get(Calendar.MONTH), cal.get(Calendar.YEAR))
             }
-            _resumoMensal.postValue(resumosMap.values.sortedByDescending { it.ano * 100 + it.mes })
+
+            val resumoMensalList = mutableListOf<ResumoMensalItem>()
+            groupedByMonth.forEach { (monthYear, faturasList) -> // Explicitamente nomear os parâmetros
+                val month = monthYear.first
+                val year = monthYear.second
+                val totalFaturas = faturasList.sumOf { it.fatura.valorTotal }
+                val numFaturas = faturasList.size
+                val numFaturasEnviadas = faturasList.count { it.fatura.status == "Enviada" }
+
+                // Calcula o saldo devedor
+                var saldoDevedor = 0.0
+                faturasList.forEach { faturaWithDetails -> // Explicitamente nomear o parâmetro
+                    if (faturaWithDetails.fatura.status != "Paga") {
+                        saldoDevedor += faturaWithDetails.fatura.valorTotal
+                    }
+                }
+
+                resumoMensalList.add(ResumoMensalItem(month, year, totalFaturas, numFaturas, numFaturasEnviadas, saldoDevedor))
+            }
+            _faturasMensais.postValue(resumoMensalList.sortedByDescending { it.year * 12 + it.month })
         }
     }
 
-    fun carregarResumoPorCliente(startDate: String?, endDate: String?) = viewModelScope.launch {
-        faturaDao.getResumoPorCliente(startDate, endDate).collect {
-            _resumoCliente.postValue(it)
+    fun getFaturasByMonthAndYear(month: Int, year: Int): LiveData<List<FaturaWithDetails>> {
+        val faturasLiveData = MutableLiveData<List<FaturaWithDetails>>()
+        viewModelScope.launch {
+            db.faturaDao().getFaturasByMonth(month, year).observeForever {
+                faturasLiveData.postValue(it)
+            }
         }
+        return faturasLiveData
     }
 
-    fun carregarResumoPorArtigo(startDate: String?, endDate: String?) = viewModelScope.launch {
-        faturaDao.getFaturasNoPeriodo(startDate, endDate).collect { faturas ->
-            val artigosMap = mutableMapOf<Long?, ResumoArtigoItem>()
-            faturas.forEach { fatura ->
-                val itens = faturaDao.getFaturaWithDetails(fatura.id)?.artigos ?: emptyList()
-                itens.forEach { item ->
-                    val artigoId = item.artigoId
-                    val quantidade = item.quantidade ?: 0
-                    val precoTotalItem = item.preco ?: 0.0
-                    val nomeArtigo = item.artigoId?.let { AppDatabase.getDatabase(getApplication()).artigoDao().getById(it)?.nome } ?: "Desconhecido"
-
-                    if (nomeArtigo.isNotEmpty() && quantidade > 0) {
-                        val itemAtual = artigosMap.getOrPut(artigoId) {
-                            ResumoArtigoItem(nomeArtigo, 0, 0.0, artigoId)
-                        }
-                        artigosMap[artigoId] = itemAtual.copy(
-                            quantidadeTotalVendida = itemAtual.quantidadeTotalVendida + quantidade,
-                            valorTotalVendido = itemAtual.valorTotalVendido + precoTotalItem
-                        )
-                    }
-                }
+    // Exemplo de função para filtrar faturas por termo de pesquisa
+    fun searchFaturas(query: String): LiveData<List<FaturaWithDetails>> {
+        val searchResult = MutableLiveData<List<FaturaWithDetails>>()
+        viewModelScope.launch {
+            val allFaturas = db.faturaDao().getAllFaturasWithDetailsList() // Obter todas as faturas
+            val filteredList = allFaturas.filter { faturaWithDetails -> // Explicitamente nomear o parâmetro
+                val fatura = faturaWithDetails.fatura
+                val cliente = faturaWithDetails.cliente
+                val nomeClienteMatches = cliente?.nome?.contains(query, ignoreCase = true) ?: false
+                val idFaturaMatches = fatura.id.toString().contains(query, ignoreCase = true) // 'id' pertence a 'fatura'
+                nomeClienteMatches || idFaturaMatches
             }
-            _resumoArtigo.postValue(artigosMap.values.sortedByDescending { it.valorTotalVendido })
+            searchResult.postValue(filteredList)
         }
+        return searchResult
     }
 }

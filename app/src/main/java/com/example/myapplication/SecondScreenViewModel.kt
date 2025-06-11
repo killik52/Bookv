@@ -1,104 +1,95 @@
 package com.example.myapplication
 
 import android.app.Application
-import androidx.lifecycle.*
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.LiveData
+import androidx.lifecycle.MutableLiveData
+import androidx.lifecycle.viewModelScope
 import com.example.myapplication.data.AppDatabase
-import com.example.myapplication.data.model.*
-import kotlinx.coroutines.Dispatchers
+import com.example.myapplication.data.model.Artigo
+import com.example.myapplication.data.model.Cliente
+import com.example.myapplication.data.model.Fatura
+import com.example.myapplication.data.model.FaturaItem
+import com.example.myapplication.data.model.FaturaNota
+import com.example.myapplication.data.model.FaturaWithDetails
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 
 class SecondScreenViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val faturaDao = AppDatabase.getDatabase(application).faturaDao()
-    private val clienteDao = AppDatabase.getDatabase(application).clienteDao()
-    private val notaDao = AppDatabase.getDatabase(application).faturaNotaDao()
+    private val db = AppDatabase.getDatabase(application)
 
-    private val _fatura = MutableLiveData<Fatura?>()
-    val fatura: LiveData<Fatura?> = _fatura
+    private val _faturaWithDetails = MutableLiveData<FaturaWithDetails?>()
+    val faturaWithDetails: LiveData<FaturaWithDetails?> = _faturaWithDetails
 
-    private val _cliente = MutableLiveData<Cliente?>()
-    val cliente: LiveData<Cliente?> = _cliente
+    private val _clientes = MutableLiveData<List<Cliente>>()
+    val clientes: LiveData<List<Cliente>> = _clientes
 
-    private val _itensDaFatura = MutableLiveData<List<FaturaItem>>()
-    val itensDaFatura: LiveData<List<FaturaItem>> = _itensDaFatura
+    val currentFaturaId = MutableLiveData<Int>()
+    val selectedCliente = MutableLiveData<Cliente?>()
 
-    private val _fotosDaFatura = MutableLiveData<List<FaturaFoto>>()
-    val fotosDaFatura: LiveData<List<FaturaFoto>> = _fotosDaFatura
+    init {
+        loadClientes()
+    }
 
-    private val _notasDaFatura = MutableLiveData<List<String>>()
-    val notasDaFatura: LiveData<List<String>> = _notasDaFatura
-
-    private val _faturaSalvaId = MutableLiveData<Long?>()
-    val faturaSalvaId: LiveData<Long?> = _faturaSalvaId
-
-    fun carregarFatura(faturaId: Long) = viewModelScope.launch(Dispatchers.IO) {
-        val faturaCarregada = faturaDao.getFaturaWithDetails(faturaId)
-        _fatura.postValue(faturaCarregada?.fatura)
-
-        if (faturaCarregada != null) {
-            val clienteCarregado = faturaCarregada.fatura.clienteId?.let { clienteDao.getById(it) }
-                ?: faturaCarregada.fatura.cliente?.let { clienteDao.getByName(it) }
-            _cliente.postValue(clienteCarregado)
-            _itensDaFatura.postValue(faturaCarregada.artigos)
-            _fotosDaFatura.postValue(faturaCarregada.fotos)
-            _notasDaFatura.postValue(faturaCarregada.notas.map { it.noteContent })
+    private fun loadClientes() {
+        viewModelScope.launch {
+            db.clienteDao().getAll().observeForever {
+                _clientes.value = it
+            }
         }
     }
 
-    fun carregarClientePorId(clienteId: Long) = viewModelScope.launch(Dispatchers.IO) {
-        val clienteCarregado = clienteDao.getById(clienteId)
-        _cliente.postValue(clienteCarregado)
+    fun loadFatura(faturaId: Int) {
+        viewModelScope.launch {
+            db.faturaDao().getFaturaWithDetails(faturaId).observeForever {
+                _faturaWithDetails.value = it
+                currentFaturaId.value = it?.fatura?.id
+                selectedCliente.value = it?.cliente
+            }
+        }
     }
 
-    fun salvarFaturaCompleta(fatura: Fatura, artigos: List<ArtigoItem>, notas: List<String>, fotos: List<String>) = viewModelScope.launch(Dispatchers.IO) {
-        // Definir cliente_id com base no cliente atual
-        fatura.clienteId = _cliente.value?.id
+    fun saveFaturaWithItems(fatura: Fatura, items: List<FaturaItem>) {
+        viewModelScope.launch {
+            if (fatura.id == 0) {
+                val newFaturaId = db.faturaDao().insert(fatura)
+                items.forEach { item ->
+                    db.faturaDao().insertFaturaItem(item.copy(fatura_id = newFaturaId.toInt()))
+                }
+                currentFaturaId.value = newFaturaId.toInt()
+            } else {
+                db.faturaDao().update(fatura)
+                db.faturaDao().deleteFaturaItemsByFaturaId(fatura.id)
+                items.forEach { item ->
+                    db.faturaDao().insertFaturaItem(item.copy(fatura_id = fatura.id))
+                }
+            }
+        }
+    }
 
-        // Salvar ou atualizar a fatura principal para obter o ID
-        val idFaturaSalva = faturaDao.insertFatura(fatura)
-        val finalFaturaId = if (fatura.id != 0L) fatura.id else idFaturaSalva
-
-        // Limpar associações antigas
-        faturaDao.deleteItensByFaturaId(finalFaturaId)
-        faturaDao.deleteFotosByFaturaId(finalFaturaId)
-        notaDao.deleteAllNotesForFatura(finalFaturaId)
-
-        // Salvar novos itens
-        artigos.forEach { artigoItem ->
-            val faturaItem = FaturaItem(
-                faturaId = finalFaturaId,
-                artigoId = if (artigoItem.id > 0) artigoItem.id else null,
-                quantidade = artigoItem.quantidade,
-                preco = artigoItem.preco,
-                clienteId = _cliente.value?.id
+    fun addNoteToFatura(faturaId: Int, content: String) {
+        viewModelScope.launch {
+            val newNote = FaturaNota(
+                id = 0,
+                faturaRelacionadaId = faturaId,
+                conteudo = content,
+                dataCriacao = System.currentTimeMillis()
             )
-            faturaDao.insertFaturaItem(faturaItem)
-        }
-
-        // Salvar novas fotos
-        fotos.forEach { path ->
-            faturaDao.insertFaturaFoto(FaturaFoto(faturaId = finalFaturaId, photoPath = path))
-        }
-
-        // Salvar novas notas
-        notaDao.upsertAll(finalFaturaId, notas.map { FaturaNota(faturaId = finalFaturaId, noteContent = it) })
-
-        _faturaSalvaId.postValue(finalFaturaId)
-    }
-
-    fun marcarFaturaComoEnviada(faturaId: Long) = viewModelScope.launch(Dispatchers.IO) {
-        val faturaAtual = faturaDao.getFaturaById(faturaId)
-        faturaAtual?.let {
-            it.foiEnviada = 1
-            faturaDao.updateFatura(it)
+            db.faturaNotaDao().insert(newNote)
         }
     }
 
-    fun onSaveComplete() {
-        _faturaSalvaId.value = null
+    fun getNotesForFatura(faturaId: Int): LiveData<List<FaturaNota>> {
+        return db.faturaNotaDao().getNotesForFatura(faturaId)
+    }
+
+    fun getArtigoById(artigoId: Int): LiveData<Artigo?> {
+        return db.artigoDao().getArtigoById(artigoId)
+    }
+
+    fun getAllArtigos(): LiveData<List<Artigo>> {
+        return db.artigoDao().getAllArtigos()
     }
 }

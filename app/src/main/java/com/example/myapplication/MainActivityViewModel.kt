@@ -1,73 +1,85 @@
 package com.example.myapplication
 
 import android.app.Application
-import androidx.lifecycle.*
-import com.example.myapplication.data.AppDatabase
-import com.example.myapplication.data.model.*
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.map
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.LiveData
+import androidx.lifecycle.MutableLiveData
+import androidx.lifecycle.viewModelScope
+import com.example.myapplication.data.AppDatabase // Adicione esta linha
+import com.example.myapplication.data.model.Fatura
+import com.example.myapplication.data.model.FaturaItem
+import com.example.myapplication.data.model.FaturaWithDetails
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Calendar
 
 class MainActivityViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val faturaDao = AppDatabase.getDatabase(application).faturaDao()
-    private val lixeiraDao = AppDatabase.getDatabase(application).lixeiraDao()
+    private val db = AppDatabase.getDatabase(application) // Obtenha a instância do AppDatabase
 
-    val faturas: LiveData<List<FaturaResumidaItem>> = faturaDao.getAllFaturas()
-        .map { faturas ->
-            faturas.map { converterParaFaturaResumida(it) }
-        }.asLiveData()
+    private val _faturasRecentes = MutableLiveData<List<FaturaWithDetails>>()
+    val faturasRecentes: LiveData<List<FaturaWithDetails>> = _faturasRecentes
 
-    private val _faturaEncontrada = MutableLiveData<Fatura?>()
-    val faturaEncontrada: LiveData<Fatura?> = _faturaEncontrada
+    private val _totalFaturasHoje = MutableLiveData<Double>()
+    val totalFaturasHoje: LiveData<Double> = _totalFaturasHoje
 
-    fun moverFaturaParaLixeira(faturaResumida: FaturaResumidaItem) = viewModelScope.launch(Dispatchers.IO) {
-        val faturaCompleta = faturaDao.getFaturaWithDetails(faturaResumida.id) ?: return@launch
-        val faturaNaLixeira = FaturaLixeira(
-            faturaOriginalId = faturaCompleta.fatura.id,
-            numeroFatura = faturaCompleta.fatura.numeroFatura,
-            cliente = faturaCompleta.fatura.cliente,
-            subtotal = faturaCompleta.fatura.subtotal,
-            desconto = faturaCompleta.fatura.desconto,
-            descontoPercent = faturaCompleta.fatura.descontoPercent,
-            taxaEntrega = faturaCompleta.fatura.taxaEntrega,
-            saldoDevedor = faturaCompleta.fatura.saldoDevedor,
-            data = faturaCompleta.fatura.data,
-            dataDelecao = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
-        )
-        lixeiraDao.insert(faturaNaLixeira)
-        faturaDao.deleteFaturaById(faturaCompleta.fatura.id)
+    init {
+        loadFaturasRecentes()
+        loadTotalFaturasHoje()
     }
 
-    fun buscarFaturaPorId(id: Long) = viewModelScope.launch(Dispatchers.IO) {
-        val fatura = faturaDao.getFaturaById(id)
-        _faturaEncontrada.postValue(fatura)
+    private fun loadFaturasRecentes() {
+        viewModelScope.launch {
+            db.faturaDao().getLast30DaysFaturasWithDetails().observeForever {
+                _faturasRecentes.value = it
+            }
+        }
     }
 
-    fun onBuscaConcluida() {
-        _faturaEncontrada.value = null
+    private fun loadTotalFaturasHoje() {
+        viewModelScope.launch {
+            val startOfDay = Calendar.getInstance().apply {
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }.timeInMillis
+
+            val endOfDay = Calendar.getInstance().apply {
+                set(Calendar.HOUR_OF_DAY, 23)
+                set(Calendar.MINUTE, 59)
+                set(Calendar.SECOND, 59)
+                set(Calendar.MILLISECOND, 999)
+            }.timeInMillis
+
+            db.faturaDao().getFaturasByDateRange(startOfDay, endOfDay).observeForever { faturas ->
+                _totalFaturasHoje.value = faturas.sumOf { it.fatura.valorTotal }
+            }
+        }
     }
 
-    private fun converterParaFaturaResumida(fatura: Fatura): FaturaResumidaItem {
-        return FaturaResumidaItem(
-            id = fatura.id,
-            numeroFatura = fatura.numeroFatura ?: "N/A",
-            cliente = fatura.cliente ?: "N/A",
-            serialNumbers = emptyList(), // Serial agora vem de FaturaItem
-            saldoDevedor = fatura.saldoDevedor ?: 0.0,
-            data = formatarData(fatura.data),
-            foiEnviada = fatura.foiEnviada == 1
-        )
+    fun addFatura(fatura: Fatura, faturaItems: List<FaturaItem>) {
+        viewModelScope.launch {
+            db.faturaDao().insertFaturaWithItems(fatura, faturaItems)
+        }
     }
 
-    private fun formatarData(dataDb: String?): String {
-        if (dataDb.isNullOrEmpty()) return ""
-        return try {
-            val inputFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
-            val outputFormat = SimpleDateFormat("dd MMM yy", Locale("pt", "BR"))
-            inputFormat.parse(dataDb)?.let { outputFormat.format(it) } ?: dataDb
-        } catch (e: Exception) { dataDb }
+    fun getFaturaById(faturaId: Int): LiveData<FaturaWithDetails?> {
+        return db.faturaDao().getFaturaWithDetails(faturaId)
+    }
+
+    // Corrigido para garantir que o tipo do parâmetro é inferível
+    fun filterFaturas(query: String): LiveData<List<FaturaWithDetails>> {
+        val searchResult = MutableLiveData<List<FaturaWithDetails>>()
+        viewModelScope.launch {
+            val filteredList = _faturasRecentes.value?.filter { faturaWithDetails -> // Explicitamente nomear o parâmetro
+                val fatura = faturaWithDetails.fatura
+                val cliente = faturaWithDetails.cliente
+                val nomeClienteMatches = cliente?.nome?.contains(query, ignoreCase = true) ?: false
+                val idFaturaMatches = fatura.id.toString().contains(query, ignoreCase = true)
+                nomeClienteMatches || idFaturaMatches
+            } ?: emptyList()
+            searchResult.postValue(filteredList)
+        }
+        return searchResult
     }
 }

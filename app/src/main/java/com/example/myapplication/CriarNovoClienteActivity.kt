@@ -1,91 +1,143 @@
 package com.example.myapplication
 
-import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
+import android.widget.Button
+import android.widget.EditText
 import android.widget.Toast
-import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.viewModelScope
-import com.example.myapplication.data.AppDatabase
-import com.example.myapplication.data.ClienteRepository
+import com.example.myapplication.api.CnpjApiService
+import com.example.myapplication.data.AppDatabase // Adicione esta linha
 import com.example.myapplication.data.model.Cliente
-import com.example.myapplication.databinding.ActivityCriarNovoClienteBinding
+import com.example.myapplication.data.model.CnpjData
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-
-// ViewModel para a criação de cliente
-class CriarClienteViewModel(private val repository: ClienteRepository) : ViewModel() {
-    // A função agora retorna o ID do novo cliente para que possamos passá-lo de volta
-    fun salvarCliente(cliente: Cliente, onSaveFinished: (novoId: Long) -> Unit) = viewModelScope.launch {
-        val id = repository.inserir(cliente)
-        onSaveFinished(id)
-    }
-}
+import kotlinx.coroutines.withContext
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
 
 class CriarNovoClienteActivity : AppCompatActivity() {
 
-    private lateinit var binding: ActivityCriarNovoClienteBinding
-    private val viewModel: CriarClienteViewModel by viewModels {
-        object : ViewModelProvider.Factory {
-            override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                if (modelClass.isAssignableFrom(CriarClienteViewModel::class.java)) {
-                    val dao = AppDatabase.getDatabase(application).clienteDao()
-                    val repository = ClienteRepository(dao)
-                    @Suppress("UNCHECKED_CAST")
-                    return CriarClienteViewModel(repository) as T
+    private lateinit var editTextNome: EditText
+    private lateinit var editTextEmail: EditText
+    private lateinit var editTextTelefone: EditText
+    private lateinit var editTextEndereco: EditText
+    private lateinit var editTextCnpj: EditText
+    private lateinit var editTextInscricaoEstadual: EditText
+    private lateinit var editTextNomeFantasia: EditText
+    private lateinit var editTextRazaoSocial: EditText
+    private lateinit var buttonSalvar: Button
+    private lateinit var buttonConsultarCnpj: Button
+
+    private lateinit var cnpjApiService: CnpjApiService
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_criar_novo_cliente)
+
+        editTextNome = findViewById(R.id.editTextNome)
+        editTextEmail = findViewById(R.id.editTextEmail)
+        editTextTelefone = findViewById(R.id.editTextTelefone)
+        editTextEndereco = findViewById(R.id.editTextEndereco)
+        editTextCnpj = findViewById(R.id.editTextCnpj)
+        editTextInscricaoEstadual = findViewById(R.id.editTextInscricaoEstadual)
+        editTextNomeFantasia = findViewById(R.id.editTextNomeFantasia)
+        editTextRazaoSocial = findViewById(R.id.editTextRazaoSocial)
+        buttonSalvar = findViewById(R.id.buttonSalvar)
+        buttonConsultarCnpj = findViewById(R.id.buttonConsultarCnpj)
+
+        val retrofit = Retrofit.Builder()
+            .baseUrl("https://www.receitaws.com.br/v1/cnpj/")
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+
+        cnpjApiService = retrofit.create(CnpjApiService::class.java)
+
+        buttonConsultarCnpj.setOnClickListener {
+            val cnpj = editTextCnpj.text.toString().replace("[^0-9]".toRegex(), "")
+            if (cnpj.length == 14) {
+                consultarCnpj(cnpj)
+            } else {
+                Toast.makeText(this, "CNPJ inválido", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        buttonSalvar.setOnClickListener {
+            salvarCliente()
+        }
+    }
+
+    private fun consultarCnpj(cnpj: String) {
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val response = cnpjApiService.getCnpjData(cnpj)
+                withContext(Dispatchers.Main) {
+                    if (response.isSuccessful) {
+                        val cnpjData: CnpjData? = response.body()
+                        cnpjData?.let {
+                            editTextNome.setText(it.nome)
+                            editTextRazaoSocial.setText(it.nome) // Geralmente a Razão Social é o nome
+                            editTextNomeFantasia.setText(it.fantasia)
+                            editTextTelefone.setText(it.telefone)
+                            editTextEmail.setText(it.email)
+                            val enderecoCompleto = "${it.logradouro}, ${it.numero} - ${it.bairro}, ${it.municipio} - ${it.uf}, ${it.cep}"
+                            editTextEndereco.setText(enderecoCompleto)
+                            // A Inscrição Estadual não vem na API, então deixamos como está
+                            Toast.makeText(this@CriarNovoClienteActivity, "Dados do CNPJ preenchidos!", Toast.LENGTH_SHORT).show()
+                        } ?: run {
+                            Toast.makeText(this@CriarNovoClienteActivity, "CNPJ não encontrado ou dados incompletos.", Toast.LENGTH_LONG).show()
+                        }
+                    } else {
+                        Toast.makeText(this@CriarNovoClienteActivity, "Erro ao consultar CNPJ: ${response.code()}", Toast.LENGTH_LONG).show()
+                    }
                 }
-                throw IllegalArgumentException("Unknown ViewModel class")
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@CriarNovoClienteActivity, "Erro de rede ou CNPJ inválido: ${e.message}", Toast.LENGTH_LONG).show()
+                    Log.e("CriarNovoClienteActivity", "Erro ao consultar CNPJ", e)
+                }
             }
         }
     }
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        binding = ActivityCriarNovoClienteBinding.inflate(layoutInflater)
-        setContentView(binding.root)
+    private fun salvarCliente() {
+        val nome = editTextNome.text.toString()
+        val email = editTextEmail.text.toString()
+        val telefone = editTextTelefone.text.toString()
+        val endereco = editTextEndereco.text.toString()
+        val cnpj = editTextCnpj.text.toString()
+        val inscricaoEstadual = editTextInscricaoEstadual.text.toString()
+        val nomeFantasia = editTextNomeFantasia.text.toString()
+        val razaoSocial = editTextRazaoSocial.text.toString()
 
-        // Corrigido para usar o ID correto do seu layout XML ("textViewGuardarCliente")
-        binding.textViewGuardarCliente.setOnClickListener {
-            salvarNovoCliente()
-        }
-    }
-
-    private fun salvarNovoCliente() {
-        val nome = binding.editTextNomeCliente.text.toString().trim()
-        if (nome.isBlank()) {
-            Toast.makeText(this, "O nome do cliente é obrigatório.", Toast.LENGTH_SHORT).show()
+        if (nome.isBlank() || email.isBlank() || telefone.isBlank() || endereco.isBlank() || cnpj.isBlank() || razaoSocial.isBlank()) {
+            Toast.makeText(this, "Por favor, preencha todos os campos obrigatórios.", Toast.LENGTH_LONG).show()
             return
         }
 
         val novoCliente = Cliente(
-            id = 0, // Garante que é um novo cliente
+            id = 0, // Será auto-gerado
             nome = nome,
-            email = binding.editTextEmailCliente.text.toString().trim(),
-            telefone = binding.editTextTelefoneCliente.text.toString().trim(),
-            informacoesAdicionais = binding.editTextInformacoesAdicionais.text.toString().trim(),
-            cpf = binding.editTextCPFCliente.text.toString().trim(),
-            cnpj = binding.editTextCNPJCliente.text.toString().trim(),
-            logradouro = binding.editTextLogradouro.text.toString().trim(),
-            numero = binding.editTextNumero.text.toString().trim(),
-            complemento = binding.editTextComplemento.text.toString().trim(),
-            bairro = binding.editTextBairro.text.toString().trim(),
-            municipio = binding.editTextMunicipio.text.toString().trim(),
-            uf = binding.editTextUF.text.toString().trim(),
-            cep = binding.editTextCEP.text.toString().trim(),
-            numeroSerial = "" // Este campo não está presente no layout de criação
+            email = email,
+            telefone = telefone,
+            endereco = endereco,
+            cnpj = cnpj,
+            inscricaoEstadual = inscricaoEstadual,
+            nomeFantasia = nomeFantasia,
+            razaoSocial = razaoSocial,
+            bloqueado = false // Cliente novo não é bloqueado por padrão
         )
 
-        viewModel.salvarCliente(novoCliente) { novoId ->
-            // Após salvar, retorna o ID e o nome para a tela anterior
-            val resultIntent = Intent().apply {
-                putExtra("cliente_id", novoId)
-                putExtra("nome_cliente", nome)
+        CoroutineScope(Dispatchers.IO).launch {
+            val db = AppDatabase.getDatabase(this@CriarNovoClienteActivity) // Obtenha a instância do AppDatabase
+            db.clienteDao().insert(novoCliente)
+            withContext(Dispatchers.Main) {
+                Toast.makeText(this@CriarNovoClienteActivity, "Cliente salvo com sucesso!", Toast.LENGTH_SHORT).show()
+                val resultIntent = Intent()
+                setResult(Activity.RESULT_OK, resultIntent)
+                finish()
             }
-            setResult(Activity.RESULT_OK, resultIntent)
-            Toast.makeText(this, "Cliente '$nome' salvo com sucesso!", Toast.LENGTH_SHORT).show()
-            finish() // Fecha a tela de criação
         }
     }
 }

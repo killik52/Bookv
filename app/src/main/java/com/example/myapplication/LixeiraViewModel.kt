@@ -1,41 +1,59 @@
 package com.example.myapplication
 
 import android.app.Application
-import androidx.lifecycle.*
-import com.example.myapplication.data.AppDatabase
-import com.example.myapplication.data.model.Fatura
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.LiveData
+import androidx.lifecycle.MutableLiveData
+import androidx.lifecycle.viewModelScope
+import com.example.myapplication.data.AppDatabase // Adicione esta linha
 import com.example.myapplication.data.model.FaturaLixeira
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.*
 
 class LixeiraViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val lixeiraDao = AppDatabase.getDatabase(application).lixeiraDao()
-    private val faturaDao = AppDatabase.getDatabase(application).faturaDao()
+    private val _faturasLixeira = MutableLiveData<List<FaturaLixeira>>()
+    val faturasLixeira: LiveData<List<FaturaLixeira>> = _faturasLixeira
 
-    val faturasNaLixeira = lixeiraDao.getAll().asLiveData()
+    private val db = AppDatabase.getDatabase(application) // Obtenha a instância do AppDatabase
 
-    fun restaurarFatura(faturaLixeira: FaturaLixeira) = viewModelScope.launch(Dispatchers.IO) {
-        val faturaRestaurada = Fatura(
-            id = faturaLixeira.faturaOriginalId,
-            numeroFatura = faturaLixeira.numeroFatura,
-            cliente = faturaLixeira.cliente,
-            clienteId = null, // Cliente será resolvido na atividade
-            subtotal = faturaLixeira.subtotal,
-            desconto = faturaLixeira.desconto,
-            descontoPercent = faturaLixeira.descontoPercent,
-            taxaEntrega = faturaLixeira.taxaEntrega,
-            saldoDevedor = faturaLixeira.saldoDevedor,
-            data = faturaLixeira.data,
-            foiEnviada = 0 // Faturas restauradas voltam como não enviadas
-        )
-        faturaDao.insertFatura(faturaRestaurada)
-        lixeiraDao.deleteById(faturaLixeira.id)
+    init {
+        loadAllFaturasLixeira()
     }
 
-    fun excluirPermanentemente(faturaLixeira: FaturaLixeira) = viewModelScope.launch(Dispatchers.IO) {
-        lixeiraDao.deleteById(faturaLixeira.id)
+    private fun loadAllFaturasLixeira() {
+        viewModelScope.launch {
+            db.lixeiraDao().getAllFaturasLixeira().observeForever {
+                _faturasLixeira.postValue(it)
+            }
+        }
+    }
+
+    fun filterFaturasLixeiraByMonth(month: Int, year: Int) {
+        viewModelScope.launch {
+            db.lixeiraDao().getFaturasLixeiraByMonth(month, year).observeForever {
+                _faturasLixeira.postValue(it)
+            }
+        }
+    }
+
+    fun restoreFaturaLixeira(faturaLixeira: FaturaLixeira) {
+        viewModelScope.launch {
+            // Lógica para restaurar a fatura. Isso pode envolver:
+            // 1. Inserir a fatura de volta na tabela 'faturas'
+            // 2. Excluir da tabela 'fatura_lixeira'
+            // Exemplo (você precisará adaptar à sua lógica de restauração completa,
+            // incluindo itens da fatura, etc.):
+            // val faturaOriginal = Fatura(id = faturaLixeira.id, clienteId = faturaLixeira.clienteId, ...)
+            // db.faturaDao().insert(faturaOriginal)
+            db.lixeiraDao().delete(faturaLixeira)
+            loadAllFaturasLixeira() // Recarrega a lista após a exclusão
+        }
+    }
+
+    fun deleteFaturaLixeira(faturaLixeira: FaturaLixeira) {
+        viewModelScope.launch {
+            db.lixeiraDao().delete(faturaLixeira)
+            loadAllFaturasLixeira() // Recarrega a lista após a exclusão
+        }
     }
 }
