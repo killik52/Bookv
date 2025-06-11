@@ -20,10 +20,13 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope // Importar lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.myapplication.databinding.ActivityMainBinding
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
+import kotlinx.coroutines.Dispatchers // Importar Dispatchers
+import kotlinx.coroutines.launch // Importar launch
 
 class MainActivity : AppCompatActivity() {
 
@@ -57,7 +60,10 @@ class MainActivity : AppCompatActivity() {
             val barcodeValue = result.contents
             Log.d("MainActivity", "Código de barras lido: '$barcodeValue'")
             emitBeep()
-            openInvoiceByBarcode(barcodeValue)
+            // Chamar a função do ViewModel dentro de uma coroutine
+            lifecycleScope.launch { // Lançar em uma coroutine segura para a Activity
+                openInvoiceByBarcode(barcodeValue)
+            }
         }
     }
 
@@ -67,7 +73,11 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
         Log.d("MainActivity", "onCreate chamado")
 
-        initializeMediaPlayer()
+        // Inicialize o MediaPlayer numa coroutine para evitar bloqueios na UI thread
+        lifecycleScope.launch(Dispatchers.IO) { // Usar Dispatchers.IO para I/O
+            initializeMediaPlayer()
+        }
+
         setupRecyclerView()
         setupMenu()
         setupListeners()
@@ -88,6 +98,7 @@ class MainActivity : AppCompatActivity() {
                     .setTitle("Mover para Lixeira")
                     .setMessage("Deseja mover a fatura #${fatura.numeroFatura} para a lixeira?")
                     .setPositiveButton("Sim") { _, _ ->
+                        // Já está seguro no ViewModel, mas garantir que o trigger é rápido
                         viewModel.moverFaturaParaLixeira(fatura)
                         showToast("Fatura movida para a lixeira.")
                     }
@@ -163,6 +174,8 @@ class MainActivity : AppCompatActivity() {
     private fun openInvoiceByBarcode(barcodeValue: String) {
         val faturaId = barcodeValue.toLongOrNull()
         if (faturaId != null) {
+            // A chamada ao ViewModel já está dentro de uma coroutine (buscarFaturaPorId)
+            // Não precisamos de outro lifecycleScope.launch aqui, pois o ViewModel já trata
             viewModel.buscarFaturaPorId(faturaId)
         } else {
             showToast("Código de barras inválido.")
@@ -253,6 +266,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun initializeMediaPlayer() {
+        // Pode ser um pouco demorado, mas geralmente não bloqueia por tempo suficiente para ANR
+        // Se este fosse o problema, seria mais evidente.
         mediaPlayer = MediaPlayer.create(this, R.raw.beep)
     }
 
