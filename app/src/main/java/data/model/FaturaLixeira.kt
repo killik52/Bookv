@@ -12,12 +12,14 @@ data class FaturaLixeira(
     @ColumnInfo(name = "numero_fatura")
     var numeroFatura: String?,
     var cliente: String?,
-    var artigos: String?, // Considere normalizar isso no futuro
+
+    // Coluna 'artigos' removida, agora usa FaturaItem
+
     var subtotal: Double?,
     var desconto: Double?,
 
     @ColumnInfo(name = "desconto_percent")
-    var descontoPercent: Int?, // Adicionado para consistência
+    var descontoPercent: Int?,
 
     @ColumnInfo(name = "taxa_entrega")
     var taxaEntrega: Double?,
@@ -27,16 +29,12 @@ data class FaturaLixeira(
 
     var data: String?,
 
-    @ColumnInfo(name = "fotos_impressora")
-    var fotosImpressora: String?, // Considere remover se não usar mais
+    // Coluna 'fotos_impressora' removida
+    // Coluna 'notas' removida, agora usa FaturaNota
 
-    var notas: String?,
-
-    // Coluna que estava faltando, usada para restaurar a fatura correta
     @ColumnInfo(name = "fatura_original_id")
     var faturaOriginalId: Long = 0,
 
-    // Coluna que estava faltando, usada para ordenar na lixeira
     @ColumnInfo(name = "data_delecao")
     var dataDelecao: String?
 )

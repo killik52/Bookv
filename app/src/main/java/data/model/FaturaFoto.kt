@@ -7,12 +7,14 @@ import androidx.room.PrimaryKey
 
 @Entity(
     tableName = "fatura_fotos",
-    foreignKeys = [ForeignKey(
-        entity = Fatura::class,
-        parentColumns = ["id"],
-        childColumns = ["fatura_id"],
-        onDelete = ForeignKey.CASCADE
-    )]
+    foreignKeys = [
+        ForeignKey(
+            entity = Fatura::class,
+            parentColumns = ["id"],
+            childColumns = ["fatura_id"],
+            onDelete = ForeignKey.CASCADE // Já correto
+        )
+    ]
 )
 data class FaturaFoto(
     @PrimaryKey(autoGenerate = true)

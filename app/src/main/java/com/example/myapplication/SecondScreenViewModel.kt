@@ -15,7 +15,7 @@ class SecondScreenViewModel(application: Application) : AndroidViewModel(applica
 
     private val faturaDao = AppDatabase.getDatabase(application).faturaDao()
     private val clienteDao = AppDatabase.getDatabase(application).clienteDao()
-    private val notaDao = AppDatabase.getDatabase(application).notaDao()
+    private val notaDao = AppDatabase.getDatabase(application).faturaNotaDao()
 
     private val _fatura = MutableLiveData<Fatura?>()
     val fatura: LiveData<Fatura?> = _fatura
@@ -35,18 +35,17 @@ class SecondScreenViewModel(application: Application) : AndroidViewModel(applica
     private val _faturaSalvaId = MutableLiveData<Long?>()
     val faturaSalvaId: LiveData<Long?> = _faturaSalvaId
 
-
     fun carregarFatura(faturaId: Long) = viewModelScope.launch(Dispatchers.IO) {
-        val faturaCarregada = faturaDao.getFaturaById(faturaId)
-        _fatura.postValue(faturaCarregada)
+        val faturaCarregada = faturaDao.getFaturaWithDetails(faturaId)
+        _fatura.postValue(faturaCarregada?.fatura)
 
         if (faturaCarregada != null) {
-            val clienteCarregado = faturaCarregada.cliente?.let { clienteDao.getByName(it) }
+            val clienteCarregado = faturaCarregada.fatura.clienteId?.let { clienteDao.getById(it) }
+                ?: faturaCarregada.fatura.cliente?.let { clienteDao.getByName(it) }
             _cliente.postValue(clienteCarregado)
-
-            // Carrega notas, fotos, etc.
-            val notas = faturaCarregada.notas?.split("|")?.filter { it.isNotEmpty() } ?: emptyList()
-            _notasDaFatura.postValue(notas)
+            _itensDaFatura.postValue(faturaCarregada.artigos)
+            _fotosDaFatura.postValue(faturaCarregada.fotos)
+            _notasDaFatura.postValue(faturaCarregada.notas.map { it.noteContent })
         }
     }
 
@@ -56,8 +55,8 @@ class SecondScreenViewModel(application: Application) : AndroidViewModel(applica
     }
 
     fun salvarFaturaCompleta(fatura: Fatura, artigos: List<ArtigoItem>, notas: List<String>, fotos: List<String>) = viewModelScope.launch(Dispatchers.IO) {
-        // Combinar notas específicas e padrão em uma única string
-        fatura.notas = notas.joinToString("|")
+        // Definir cliente_id com base no cliente atual
+        fatura.clienteId = _cliente.value?.id
 
         // Salvar ou atualizar a fatura principal para obter o ID
         val idFaturaSalva = faturaDao.insertFatura(fatura)
@@ -66,6 +65,7 @@ class SecondScreenViewModel(application: Application) : AndroidViewModel(applica
         // Limpar associações antigas
         faturaDao.deleteItensByFaturaId(finalFaturaId)
         faturaDao.deleteFotosByFaturaId(finalFaturaId)
+        notaDao.deleteAllNotesForFatura(finalFaturaId)
 
         // Salvar novos itens
         artigos.forEach { artigoItem ->
@@ -83,6 +83,9 @@ class SecondScreenViewModel(application: Application) : AndroidViewModel(applica
         fotos.forEach { path ->
             faturaDao.insertFaturaFoto(FaturaFoto(faturaId = finalFaturaId, photoPath = path))
         }
+
+        // Salvar novas notas
+        notaDao.upsertAll(finalFaturaId, notas.map { FaturaNota(faturaId = finalFaturaId, noteContent = it) })
 
         _faturaSalvaId.postValue(finalFaturaId)
     }

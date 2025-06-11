@@ -3,8 +3,7 @@ package com.example.myapplication
 import android.app.Application
 import androidx.lifecycle.*
 import com.example.myapplication.data.AppDatabase
-import com.example.myapplication.data.model.Fatura
-import com.example.myapplication.data.model.FaturaLixeira
+import com.example.myapplication.data.model.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -21,38 +20,32 @@ class MainActivityViewModel(application: Application) : AndroidViewModel(applica
             faturas.map { converterParaFaturaResumida(it) }
         }.asLiveData()
 
-    // LiveData para a fatura encontrada pelo código de barras
     private val _faturaEncontrada = MutableLiveData<Fatura?>()
     val faturaEncontrada: LiveData<Fatura?> = _faturaEncontrada
 
     fun moverFaturaParaLixeira(faturaResumida: FaturaResumidaItem) = viewModelScope.launch(Dispatchers.IO) {
-        val faturaCompleta = faturaDao.getFaturaById(faturaResumida.id) ?: return@launch
+        val faturaCompleta = faturaDao.getFaturaWithDetails(faturaResumida.id) ?: return@launch
         val faturaNaLixeira = FaturaLixeira(
-            faturaOriginalId = faturaCompleta.id,
-            numeroFatura = faturaCompleta.numeroFatura,
-            cliente = faturaCompleta.cliente,
-            artigos = faturaCompleta.artigos,
-            subtotal = faturaCompleta.subtotal,
-            desconto = faturaCompleta.desconto,
-            descontoPercent = faturaCompleta.descontoPercent,
-            taxaEntrega = faturaCompleta.taxaEntrega,
-            saldoDevedor = faturaCompleta.saldoDevedor,
-            data = faturaCompleta.data,
-            notas = faturaCompleta.notas,
-            fotosImpressora = faturaCompleta.fotosImpressora,
+            faturaOriginalId = faturaCompleta.fatura.id,
+            numeroFatura = faturaCompleta.fatura.numeroFatura,
+            cliente = faturaCompleta.fatura.cliente,
+            subtotal = faturaCompleta.fatura.subtotal,
+            desconto = faturaCompleta.fatura.desconto,
+            descontoPercent = faturaCompleta.fatura.descontoPercent,
+            taxaEntrega = faturaCompleta.fatura.taxaEntrega,
+            saldoDevedor = faturaCompleta.fatura.saldoDevedor,
+            data = faturaCompleta.fatura.data,
             dataDelecao = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
         )
         lixeiraDao.insert(faturaNaLixeira)
-        faturaDao.deleteFaturaById(faturaCompleta.id)
+        faturaDao.deleteFaturaById(faturaCompleta.fatura.id)
     }
 
-    // Função para buscar a fatura pelo ID (código de barras)
     fun buscarFaturaPorId(id: Long) = viewModelScope.launch(Dispatchers.IO) {
         val fatura = faturaDao.getFaturaById(id)
         _faturaEncontrada.postValue(fatura)
     }
 
-    // Função para ser chamada quando a busca for concluída
     fun onBuscaConcluida() {
         _faturaEncontrada.value = null
     }
@@ -62,20 +55,11 @@ class MainActivityViewModel(application: Application) : AndroidViewModel(applica
             id = fatura.id,
             numeroFatura = fatura.numeroFatura ?: "N/A",
             cliente = fatura.cliente ?: "N/A",
-            serialNumbers = extrairSeriais(fatura.artigos),
+            serialNumbers = emptyList(), // Serial agora vem de FaturaItem
             saldoDevedor = fatura.saldoDevedor ?: 0.0,
             data = formatarData(fatura.data),
             foiEnviada = fatura.foiEnviada == 1
         )
-    }
-
-    private fun extrairSeriais(artigosString: String?): List<String?> {
-        if (artigosString.isNullOrEmpty()) return emptyList()
-        return artigosString.split("|").mapNotNull { artigoData ->
-            val parts = artigoData.split(",")
-            if (parts.size >= 5) parts[4].takeIf { it.isNotBlank() && it.lowercase(Locale.ROOT) != "null" }
-            else null
-        }
     }
 
     private fun formatarData(dataDb: String?): String {

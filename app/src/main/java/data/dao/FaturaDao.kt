@@ -2,9 +2,7 @@ package com.example.myapplication.data.dao
 
 import androidx.room.*
 import com.example.myapplication.ResumoClienteItem
-import com.example.myapplication.data.model.Fatura
-import com.example.myapplication.data.model.FaturaFoto
-import com.example.myapplication.data.model.FaturaItem
+import com.example.myapplication.data.model.*
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -25,15 +23,12 @@ interface FaturaDao {
     @Query("DELETE FROM faturas WHERE id = :id")
     suspend fun deleteFaturaById(id: Long)
 
-    // Adicionado para o ClienteViewModel
     @Query("SELECT * FROM faturas WHERE cliente = :clienteNome")
     suspend fun getFaturasPorClienteNome(clienteNome: String): List<Fatura>
 
-    // Adicionado para o DetalhesFaturasMesActivity
     @Query("SELECT * FROM faturas WHERE strftime('%Y', data) = :ano AND strftime('%m', data) = :mesFormatado ORDER BY data DESC")
     fun getFaturasPorMesAno(ano: Int, mesFormatado: String): Flow<List<Fatura>>
 
-    // Adicionado para o ResumoFinanceiroViewModel
     @Query("""
         SELECT * FROM faturas
         WHERE (:startDate IS NULL OR date(data) >= :startDate)
@@ -41,7 +36,6 @@ interface FaturaDao {
     """)
     fun getFaturasNoPeriodo(startDate: String?, endDate: String?): Flow<List<Fatura>>
 
-    // CORREÇÃO APLICADA AQUI
     @Query("""
         SELECT cliente AS nomeCliente, SUM(saldo_devedor) as totalGasto, MIN(id) as clienteId
         FROM faturas
@@ -51,6 +45,9 @@ interface FaturaDao {
     """)
     fun getResumoPorCliente(startDate: String?, endDate: String?): Flow<List<ResumoClienteItem>>
 
+    @Transaction
+    @Query("SELECT * FROM faturas WHERE id = :faturaId")
+    suspend fun getFaturaWithDetails(faturaId: Long): FaturaWithDetails?
 
     // ITENS DA FATURA
     @Insert(onConflict = OnConflictStrategy.REPLACE)

@@ -20,11 +20,21 @@ class DefinicoesActivity : AppCompatActivity() {
     private val viewModel: DefinicoesViewModel by viewModels()
     private var pendingAction: String? = null
 
-    // Launcher para seleção de arquivo CSV
     private val pickCsvLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         uri?.let {
             if (pendingAction == "import_csv") {
                 confirmarImportacaoClientesCsv(it)
+            } else if (pendingAction == "import_backup") {
+                confirmarImportacaoBackup(it)
+            }
+        }
+        pendingAction = null
+    }
+
+    private val createBackupLauncher = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri: Uri? ->
+        uri?.let {
+            if (pendingAction == "export_backup") {
+                confirmarExportacaoBackup(it)
             }
         }
         pendingAction = null
@@ -35,7 +45,8 @@ class DefinicoesActivity : AppCompatActivity() {
             showToast("Permissões concedidas.")
             when (pendingAction) {
                 "import_csv" -> pickCsvLauncher.launch("text/comma-separated-values")
-                // Adicionar outras ações aqui se necessário
+                "import_backup" -> pickCsvLauncher.launch("application/json")
+                "export_backup" -> createBackupLauncher.launch("backup_${System.currentTimeMillis()}.json")
             }
         } else {
             showToast("Permissões de armazenamento são necessárias.")
@@ -53,6 +64,12 @@ class DefinicoesActivity : AppCompatActivity() {
 
     private fun observeViewModel() {
         viewModel.importacaoCsvResult.observe(this) { message ->
+            showToast(message)
+        }
+        viewModel.backupResult.observe(this) { message ->
+            showToast(message)
+        }
+        viewModel.restoreResult.observe(this) { message ->
             showToast(message)
         }
     }
@@ -97,13 +114,22 @@ class DefinicoesActivity : AppCompatActivity() {
             }
         }
 
-        // Lógica de import/export de DB comentada para focar na correção de erros.
-        // A implementação anterior era baseada em SQLiteOpenHelper e precisa ser refeita para Room.
         findViewById<LinearLayout>(R.id.exportButtonLayout).setOnClickListener {
-            showToast("Função de exportação de backup em desenvolvimento.")
+            pendingAction = "export_backup"
+            if (checkStoragePermissions()) {
+                createBackupLauncher.launch("backup_${System.currentTimeMillis()}.json")
+            } else {
+                requestStoragePermissions()
+            }
         }
+
         findViewById<LinearLayout>(R.id.importButtonLayout).setOnClickListener {
-            showToast("Função de importação de backup em desenvolvimento.")
+            pendingAction = "import_backup"
+            if (checkStoragePermissions()) {
+                pickCsvLauncher.launch("application/json")
+            } else {
+                requestStoragePermissions()
+            }
         }
     }
 
@@ -116,11 +142,30 @@ class DefinicoesActivity : AppCompatActivity() {
             .show()
     }
 
+    private fun confirmarExportacaoBackup(uri: Uri) {
+        AlertDialog.Builder(this)
+            .setTitle("Exportar Backup")
+            .setMessage("Isso criará um backup do banco de dados em formato JSON. Deseja continuar?")
+            .setPositiveButton("Exportar") { _, _ -> viewModel.exportDatabase(uri) }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    private fun confirmarImportacaoBackup(uri: Uri) {
+        AlertDialog.Builder(this)
+            .setTitle("Importar Backup")
+            .setMessage("Isso restaurará os dados do arquivo JSON selecionado. Dados existentes podem ser substituídos. Deseja continuar?")
+            .setPositiveButton("Importar") { _, _ -> viewModel.importarClientesDeCsv(uri) }
+            .setNegativeButton("Confirmar") { _, _ -> viewModel.importDatabase(uri) }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
     private fun checkStoragePermissions(): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
         } else {
-            true // Permissions are granted by default on older Android versions (pre-M)
+            true
         }
     }
 

@@ -1,7 +1,6 @@
 package com.example.myapplication
 
 import android.app.Activity
-import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.graphics.Bitmap
@@ -32,15 +31,20 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.example.myapplication.data.AppDatabase
 import com.example.myapplication.data.model.Cliente
 import com.example.myapplication.data.model.Fatura
 import com.example.myapplication.databinding.ActivitySecondScreenBinding
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.MultiFormatWriter
 import com.google.zxing.common.BitMatrix
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -80,7 +84,7 @@ class SecondScreenActivity : AppCompatActivity() {
     private lateinit var sharedPreferences: SharedPreferences
     private lateinit var notasPadraoPreferences: SharedPreferences
     private lateinit var faturaPrefs: SharedPreferences
-
+    private val db by lazy { AppDatabase.getDatabase(this) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -112,8 +116,7 @@ class SecondScreenActivity : AppCompatActivity() {
     private fun setupUI() {
         binding.dateTextViewSecondScreen.text = SimpleDateFormat("dd MMM yy", Locale("pt", "BR")).format(Date())
 
-        // Adapters
-        artigoAdapter = ArtigoAdapter(this, artigosList, { pos -> /* onEdit */ }, { pos -> /* onDelete */ }, { pos -> onArtigoLongPressed(pos) })
+        artigoAdapter = ArtigoAdapter(this, artigosList, { pos -> }, { pos -> }, { pos -> onArtigoLongPressed(pos) })
         binding.artigosRecyclerViewSecondScreen.layoutManager = LinearLayoutManager(this)
         binding.artigosRecyclerViewSecondScreen.adapter = artigoAdapter
 
@@ -155,16 +158,31 @@ class SecondScreenActivity : AppCompatActivity() {
                 taxaEntrega = fatura.taxaEntrega ?: 0.0
                 faturaEnviadaSucesso = fatura.foiEnviada == 1
 
-                val artigosDaFatura = fatura.artigos?.split("|")?.mapNotNull {
-                    val parts = it.split(",")
-                    if (parts.size >= 6) ArtigoItem(parts[0].toLongOrNull() ?: 0L, parts[1], parts[2].toInt(), parts[3].toDouble(), parts[4], parts[5]) else null
-                } ?: emptyList()
-
-                artigosList.clear()
-                artigosList.addAll(artigosDaFatura)
-                artigoAdapter.notifyDataSetChanged()
-
-                updateSubtotal()
+                viewModel.itensDaFatura.observe(this) { itens ->
+                    lifecycleScope.launch {
+                        artigosList.clear()
+                        itens?.forEach { item ->
+                            val artigoNome = item.artigoId?.let {
+                                withContext(Dispatchers.IO) {
+                                    db.artigoDao().getById(it)?.nome ?: "Desconhecido"
+                                }
+                            } ?: "Desconhecido"
+                            val artigo = ArtigoItem(
+                                id = item.artigoId ?: 0L,
+                                nome = artigoNome,
+                                quantidade = item.quantidade ?: 1,
+                                preco = item.preco ?: 0.0,
+                                numeroSerial = null,
+                                descricao = null
+                            )
+                            artigosList.add(artigo)
+                        }
+                        withContext(Dispatchers.Main) {
+                            artigoAdapter.notifyDataSetChanged()
+                            updateSubtotal()
+                        }
+                    }
+                }
             }
         }
 
@@ -239,16 +257,14 @@ class SecondScreenActivity : AppCompatActivity() {
             id = faturaId.takeIf { it != -1L } ?: 0L,
             numeroFatura = binding.invoiceNumberTextView.text.toString(),
             cliente = nomeClienteSalvo,
-            artigos = artigosList.joinToString(separator = "|") { "${it.id},${it.nome},${it.quantidade},${it.preco},${it.numeroSerial},${it.descricao}" },
+            clienteId = clienteIdSalvo.takeIf { it != -1L },
             subtotal = artigosList.sumOf { it.preco },
             desconto = desconto,
-            descontoPercent = if(isPercentDesconto) 1 else 0,
+            descontoPercent = if (isPercentDesconto) 1 else 0,
             taxaEntrega = taxaEntrega,
             saldoDevedor = artigosList.sumOf { it.preco } - descontoValor + taxaEntrega,
             data = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date()),
-            notas = notasList.joinToString("|"),
-            foiEnviada = if (faturaEnviadaSucesso) 1 else 0,
-            fotosImpressora = null // Obsoleto
+            foiEnviada = if (faturaEnviadaSucesso) 1 else 0
         )
 
         viewModel.salvarFaturaCompleta(faturaParaSalvar, artigosList, notasList, fotosList)
@@ -340,8 +356,6 @@ class SecondScreenActivity : AppCompatActivity() {
         binding.saldoDevedorValueTextView.text = decimalFormat.format(saldoDevedor)
     }
 
-    // --- Funções de UI e Geração de PDF (maioria sem alterações) ---
-
     private fun showAddNotaDialog() {
         val dialogView = layoutInflater.inflate(R.layout.dialog_add_nota, null)
         val editTextNota = dialogView.findViewById<EditText>(R.id.editTextNota)
@@ -373,14 +387,8 @@ class SecondScreenActivity : AppCompatActivity() {
             showToast("Cliente e artigos são necessários para gerar o PDF.")
             return null
         }
-        // O resto da lógica de geração de PDF pode permanecer muito semelhante
-        // Apenas certifique-se de que os dados (cliente, empresa) são buscados
-        // de fontes confiáveis (SharedPreferences ou ViewModel).
-        // A lógica de desenho no canvas permanece a mesma.
-        // Por brevidade, o código completo da geração do PDF foi omitido,
-        // mas sua implementação anterior deve funcionar com os dados agora estruturados.
         showToast("Lógica de geração de PDF a ser implementada com os dados do ViewModel.")
-        return null // Placeholder
+        return null
     }
 
     private fun viewPDF(file: File) {

@@ -26,7 +26,7 @@
     <color name="cinza_borda">#BDC3C7</color>
     <color name="verde_faturamento">#2ECC71</color>
     <color name="azul_cliente">#3498DB</color>
-    <color name="roxo_artigo">#FAEDFF</color>
-    <color name="top_band_color">#00a5c3</color>
+    <color name="roxo_artigo">#FADED2</color>
+    <color name="top_band_color">#00A5C3</color>
     <color name="second_screen_status_bar_color">#00A5C3</color>
 </resources>

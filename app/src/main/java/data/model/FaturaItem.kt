@@ -8,9 +8,24 @@ import androidx.room.PrimaryKey
 @Entity(
     tableName = "fatura_itens",
     foreignKeys = [
-        ForeignKey(entity = Fatura::class, parentColumns = ["id"], childColumns = ["fatura_id"], onDelete = ForeignKey.CASCADE),
-        ForeignKey(entity = Artigo::class, parentColumns = ["id"], childColumns = ["artigo_id"], onDelete = ForeignKey.SET_NULL),
-        ForeignKey(entity = Cliente::class, parentColumns = ["id"], childColumns = ["cliente_id"], onDelete = ForeignKey.SET_NULL)
+        ForeignKey(
+            entity = Fatura::class,
+            parentColumns = ["id"],
+            childColumns = ["fatura_id"],
+            onDelete = ForeignKey.CASCADE
+        ),
+        ForeignKey(
+            entity = Artigo::class,
+            parentColumns = ["id"],
+            childColumns = ["artigo_id"],
+            onDelete = ForeignKey.CASCADE // Alterado para CASCADE
+        ),
+        ForeignKey(
+            entity = Cliente::class,
+            parentColumns = ["id"],
+            childColumns = ["cliente_id"],
+            onDelete = ForeignKey.CASCADE // Alterado para CASCADE
+        )
     ]
 )
 data class FaturaItem(

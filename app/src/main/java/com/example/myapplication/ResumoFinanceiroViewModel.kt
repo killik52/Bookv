@@ -48,26 +48,23 @@ class ResumoFinanceiroViewModel(application: Application) : AndroidViewModel(app
 
     fun carregarResumoPorArtigo(startDate: String?, endDate: String?) = viewModelScope.launch {
         faturaDao.getFaturasNoPeriodo(startDate, endDate).collect { faturas ->
-            val artigosMap = mutableMapOf<String, ResumoArtigoItem>()
+            val artigosMap = mutableMapOf<Long?, ResumoArtigoItem>()
             faturas.forEach { fatura ->
-                fatura.artigos?.split("|")?.forEach { artigoData ->
-                    val parts = artigoData.split(",")
-                    if (parts.size >= 4) {
-                        val nomeArtigo = parts[1]
-                        val quantidade = parts[2].toIntOrNull() ?: 0
-                        val precoTotalItem = parts[3].toDoubleOrNull() ?: 0.0
-                        val artigoId = parts[0].toLongOrNull()
+                val itens = faturaDao.getFaturaWithDetails(fatura.id)?.artigos ?: emptyList()
+                itens.forEach { item ->
+                    val artigoId = item.artigoId
+                    val quantidade = item.quantidade ?: 0
+                    val precoTotalItem = item.preco ?: 0.0
+                    val nomeArtigo = item.artigoId?.let { AppDatabase.getDatabase(getApplication()).artigoDao().getById(it)?.nome } ?: "Desconhecido"
 
-                        if (nomeArtigo.isNotEmpty() && quantidade > 0) {
-                            val itemAtual = artigosMap.getOrPut(nomeArtigo) {
-                                // CORRIGIDO: Usa o construtor correto da sua classe de dados
-                                ResumoArtigoItem(nomeArtigo, 0, 0.0, artigoId)
-                            }
-                            artigosMap[nomeArtigo] = itemAtual.copy(
-                                quantidadeTotalVendida = itemAtual.quantidadeTotalVendida + quantidade,
-                                valorTotalVendido = itemAtual.valorTotalVendido + precoTotalItem
-                            )
+                    if (nomeArtigo.isNotEmpty() && quantidade > 0) {
+                        val itemAtual = artigosMap.getOrPut(artigoId) {
+                            ResumoArtigoItem(nomeArtigo, 0, 0.0, artigoId)
                         }
+                        artigosMap[artigoId] = itemAtual.copy(
+                            quantidadeTotalVendida = itemAtual.quantidadeTotalVendida + quantidade,
+                            valorTotalVendido = itemAtual.valorTotalVendido + precoTotalItem
+                        )
                     }
                 }
             }

@@ -47,15 +47,17 @@ class ClienteViewModel(application: Application) : AndroidViewModel(application)
             if (it.trim().isNotEmpty()) todosSeriais.add(it.trim())
         }
 
-        // Busca a lista de faturas uma única vez para otimizar
+        // Busca a lista de faturas para o cliente
         val faturas = faturaDao.getFaturasPorClienteNome(cliente.nome!!)
         faturas.forEach { fatura ->
-            fatura.artigos?.split('|')?.forEach { artigoData ->
-                val parts = artigoData.split(',')
-                if (parts.size >= 5) {
-                    val serial = parts[4].takeIf { it.isNotBlank() && it.lowercase() != "null" }
-                    serial?.split(',')?.forEach { s ->
-                        if (s.trim().isNotEmpty()) todosSeriais.add(s.trim())
+            // Obtém os itens da fatura usando getFaturaWithDetails
+            val faturaDetails = faturaDao.getFaturaWithDetails(fatura.id)
+            faturaDetails?.artigos?.forEach { item ->
+                // Assume que o número de série está armazenado em outro lugar, por exemplo, em Artigo
+                val artigo = item.artigoId?.let { clienteDao.getById(it) }
+                artigo?.numeroSerial?.split(',')?.forEach { serial ->
+                    if (serial.trim().isNotEmpty() && serial.lowercase() != "null") {
+                        todosSeriais.add(serial.trim())
                     }
                 }
             }

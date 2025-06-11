@@ -10,6 +10,7 @@ import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
 import com.example.myapplication.data.AppDatabase
+import com.example.myapplication.data.DatabaseBackup
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -20,9 +21,16 @@ import java.nio.charset.StandardCharsets
 class DefinicoesViewModel(application: Application) : AndroidViewModel(application) {
 
     private val clienteDao = AppDatabase.getDatabase(application).clienteDao()
+    private val backup = DatabaseBackup(application)
 
     private val _importacaoCsvResult = MutableLiveData<String>()
     val importacaoCsvResult: LiveData<String> = _importacaoCsvResult
+
+    private val _backupResult = MutableLiveData<String>()
+    val backupResult: LiveData<String> = _backupResult
+
+    private val _restoreResult = MutableLiveData<String>()
+    val restoreResult: LiveData<String> = _restoreResult
 
     fun importarClientesDeCsv(uri: Uri) = viewModelScope.launch(Dispatchers.IO) {
         var clientesAdicionados = 0
@@ -70,6 +78,30 @@ class DefinicoesViewModel(application: Application) : AndroidViewModel(applicati
         } catch (e: Exception) {
             Log.e("DefinicoesViewModel", "Erro ao importar CSV: ${e.message}", e)
             _importacaoCsvResult.postValue("Erro ao ler o arquivo CSV. Verifique o formato.")
+        }
+    }
+
+    fun exportDatabase(uri: Uri) = viewModelScope.launch(Dispatchers.IO) {
+        try {
+            getApplication<Application>().contentResolver.openOutputStream(uri)?.use { outputStream ->
+                backup.exportDatabaseToJson(outputStream)
+                _backupResult.postValue("Backup exportado com sucesso!")
+            }
+        } catch (e: Exception) {
+            Log.e("DefinicoesViewModel", "Erro ao exportar backup: ${e.message}", e)
+            _backupResult.postValue("Erro ao exportar backup: ${e.message}")
+        }
+    }
+
+    fun importDatabase(uri: Uri) = viewModelScope.launch(Dispatchers.IO) {
+        try {
+            getApplication<Application>().contentResolver.openInputStream(uri)?.use { inputStream ->
+                backup.importDatabaseFromJson(inputStream)
+                _restoreResult.postValue("Backup restaurado com sucesso!")
+            }
+        } catch (e: Exception) {
+            Log.e("DefinicoesViewModel", "Erro ao importar backup: ${e.message}", e)
+            _restoreResult.postValue("Erro ao importar backup: ${e.message}")
         }
     }
 }

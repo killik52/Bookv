@@ -1,4 +1,3 @@
-// app/src/main/java/data/model/FaturaNota.kt
 package com.example.myapplication.data.model
 
 import androidx.room.ColumnInfo
@@ -8,12 +7,14 @@ import androidx.room.PrimaryKey
 
 @Entity(
     tableName = "fatura_notas",
-    foreignKeys = [ForeignKey(
-        entity = Fatura::class,
-        parentColumns = ["id"],
-        childColumns = ["fatura_id"],
-        onDelete = ForeignKey.CASCADE
-    )]
+    foreignKeys = [
+        ForeignKey(
+            entity = Fatura::class,
+            parentColumns = ["id"],
+            childColumns = ["fatura_id"],
+            onDelete = ForeignKey.CASCADE // Já correto
+        )
+    ]
 )
 data class FaturaNota(
     @PrimaryKey(autoGenerate = true)

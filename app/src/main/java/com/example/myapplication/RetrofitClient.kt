@@ -1,8 +1,6 @@
 package com.example.myapplication.api
 
-// A importação para BuildConfig DEVE corresponder ao 'namespace' definido em app/build.gradle.kts
 import com.example.myapplication.BuildConfig
-
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
@@ -12,11 +10,9 @@ object RetrofitClient {
     private const val BASE_URL = "https://www.receitaws.com.br/v1/"
 
     private val okHttpClient = OkHttpClient.Builder().apply {
-        // Adiciona o interceptor de logging apenas em builds de debug
         if (BuildConfig.DEBUG) {
-            val loggingInterceptor = HttpLoggingInterceptor().apply {
-                level = HttpLoggingInterceptor.Level.BODY
-            }
+            val loggingInterceptor = HttpLoggingInterceptor()
+            loggingInterceptor.setLevel(HttpLoggingInterceptor.Level.BODY)
             addInterceptor(loggingInterceptor)
         }
     }.build()
