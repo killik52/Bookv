@@ -9,10 +9,12 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.util.Log
+import android.view.LayoutInflater // Importar LayoutInflater
 import android.view.View
 import android.view.animation.Animation
 import android.view.animation.AnimationUtils
 import android.widget.ArrayAdapter
+import android.widget.EditText // Importar EditText
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
@@ -20,13 +22,13 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.lifecycleScope // Importar lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.myapplication.databinding.ActivityMainBinding
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
 import kotlinx.coroutines.Dispatchers // Importar Dispatchers
 import kotlinx.coroutines.launch // Importar launch
+import androidx.lifecycle.lifecycleScope // Importar lifecycleScope
 
 class MainActivity : AppCompatActivity() {
 
@@ -61,7 +63,7 @@ class MainActivity : AppCompatActivity() {
             Log.d("MainActivity", "Código de barras lido: '$barcodeValue'")
             emitBeep()
             // Chamar a função do ViewModel dentro de uma coroutine
-            lifecycleScope.launch { // Lançar em uma coroutine segura para a Activity
+            lifecycleScope.launch(Dispatchers.Main) { // Lançar em uma coroutine segura para a Activity
                 openInvoiceByBarcode(barcodeValue)
             }
         }
@@ -120,7 +122,7 @@ class MainActivity : AppCompatActivity() {
         }
         binding.addButton.setOnClickListener { requestStorageAndCameraPermissions() }
         binding.graficosButton.setOnClickListener { startActivity(Intent(this, ResumoFinanceiroActivity::class.java)) }
-        binding.searchButton.setOnClickListener { /* Lógica de busca a ser implementada no ViewModel */ }
+        binding.searchButton.setOnClickListener { showSearchDialog() } // Chamar função para busca
         binding.dollarIcon.setOnClickListener {
             val options = ScanOptions().setDesiredBarcodeFormats(ScanOptions.CODE_128).setPrompt("Escaneie o código").setBeepEnabled(false)
             barcodeLauncher.launch(options)
@@ -161,12 +163,12 @@ class MainActivity : AppCompatActivity() {
 
         viewModel.faturaEncontrada.observe(this) { fatura ->
             fatura?.let {
-                showToast("Fatura #${it.numeroFatura} encontrada!")
+                showToast("Fatura #${it.numeroFatura} encontrada!") // .numeroFatura é de Fatura, não de FaturaWithDetails
                 val intent = Intent(this, SecondScreenActivity::class.java).apply {
                     putExtra("fatura_id", it.id)
                 }
                 startActivity(intent)
-                viewModel.onBuscaConcluida()
+                viewModel.onBuscaConcluida() // Resetar faturaEncontrada no ViewModel
             }
         }
     }
@@ -174,12 +176,38 @@ class MainActivity : AppCompatActivity() {
     private fun openInvoiceByBarcode(barcodeValue: String) {
         val faturaId = barcodeValue.toLongOrNull()
         if (faturaId != null) {
-            // A chamada ao ViewModel já está dentro de uma coroutine (buscarFaturaPorId)
-            // Não precisamos de outro lifecycleScope.launch aqui, pois o ViewModel já trata
             viewModel.buscarFaturaPorId(faturaId)
         } else {
             showToast("Código de barras inválido.")
         }
+    }
+
+    private fun showSearchDialog() {
+        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_search, null)
+        val searchEditText = dialogView.findViewById<EditText>(R.id.searchEditText)
+        AlertDialog.Builder(this)
+            .setTitle(R.string.search_dialog_title)
+            .setView(dialogView)
+            .setPositiveButton(R.string.search_dialog_positive_button) { dialog, _ ->
+                val query = searchEditText.text.toString().trim()
+                if (query.isNotEmpty()) {
+                    viewModel.searchFaturas(query).observe(this) { faturas ->
+                        if (faturas.isNotEmpty()) {
+                            faturaAdapter.updateFaturas(faturas) // Atualiza o RecyclerView com os resultados da busca
+                            showToast(getString(R.string.search_success_log_message, query, faturas.size))
+                        } else {
+                            showToast("Nenhuma fatura encontrada para '$query'.")
+                        }
+                    }
+                } else {
+                    showToast(R.string.search_empty_query_message)
+                }
+                dialog.dismiss()
+            }
+            .setNegativeButton(R.string.search_dialog_negative_button) { dialog, _ ->
+                dialog.dismiss()
+            }
+            .show()
     }
 
     private fun requestStorageAndCameraPermissions() {
@@ -237,7 +265,6 @@ class MainActivity : AppCompatActivity() {
         startActivityForResult(Intent(this, SecondScreenActivity::class.java), SECOND_SCREEN_REQUEST_CODE)
     }
 
-    // Function to explicitly show the GridView
     private fun showGridView() {
         val anim = AnimationUtils.loadAnimation(this, R.anim.slide_down)
         anim.setAnimationListener(object : Animation.AnimationListener {
@@ -251,7 +278,6 @@ class MainActivity : AppCompatActivity() {
         binding.menuGridView.startAnimation(anim)
     }
 
-    // Function to explicitly hide the GridView
     private fun hideGridView() {
         val anim = AnimationUtils.loadAnimation(this, R.anim.slide_up)
         anim.setAnimationListener(object : Animation.AnimationListener {
@@ -266,8 +292,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun initializeMediaPlayer() {
-        // Pode ser um pouco demorado, mas geralmente não bloqueia por tempo suficiente para ANR
-        // Se este fosse o problema, seria mais evidente.
         mediaPlayer = MediaPlayer.create(this, R.raw.beep)
     }
 

@@ -15,6 +15,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.Observer // Importar Observer
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import java.text.DecimalFormat
@@ -140,24 +141,25 @@ class ResumoFinanceiroActivity : AppCompatActivity() {
     }
 
     private fun observeViewModel() {
-        viewModel.resumoMensal.observe(this) { resumos ->
+        // Corrigido: Observar os LiveData apropriados e atualizar os adapters
+        viewModel.resumoMensal.observe(this, Observer { resumos ->
             if (spinnerTipoResumo.selectedItem.toString() == tipoResumoFaturamentoMensal) {
                 resumoMensalAdapter.updateData(resumos)
                 textViewTotalResumo.text = "Total Faturado: ${decimalFormat.format(resumos.sumOf { it.valorTotal })}"
             }
-        }
-        viewModel.resumoCliente.observe(this) { resumos ->
+        })
+        viewModel.resumoCliente.observe(this, Observer { resumos ->
             if (spinnerTipoResumo.selectedItem.toString() == tipoResumoPorCliente) {
                 resumoClienteAdapter.updateData(resumos)
                 textViewTotalResumo.text = "Total Geral Clientes: ${decimalFormat.format(resumos.sumOf { it.totalGasto })}"
             }
-        }
-        viewModel.resumoArtigo.observe(this) { resumos ->
+        })
+        viewModel.resumoArtigo.observe(this, Observer { resumos ->
             if (spinnerTipoResumo.selectedItem.toString() == tipoResumoPorArtigo) {
                 resumoArtigoAdapter.updateData(resumos)
                 textViewTotalResumo.text = "Valor Total de Artigos Vendidos: ${decimalFormat.format(resumos.sumOf { it.valorTotalVendido })}"
             }
-        }
+        })
     }
 
     private fun carregarDadosResumo() {

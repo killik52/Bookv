@@ -14,6 +14,10 @@ import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Observer // Importar Observer se ainda não estiver importado
+import java.io.FileDescriptor // Importar FileDescriptor
+import java.io.FileInputStream // Importar FileInputStream
+import java.io.FileOutputStream // Importar FileOutputStream
 
 class DefinicoesActivity : AppCompatActivity() {
 
@@ -41,7 +45,8 @@ class DefinicoesActivity : AppCompatActivity() {
     }
 
     private val requestPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
-        if (permissions.entries.all { it.value }) {
+        val allGranted = permissions.entries.all { it.value }
+        if (allGranted) {
             showToast("Permissões concedidas.")
             when (pendingAction) {
                 "import_csv" -> pickCsvLauncher.launch("text/comma-separated-values")
@@ -63,15 +68,9 @@ class DefinicoesActivity : AppCompatActivity() {
     }
 
     private fun observeViewModel() {
-        viewModel.importacaoCsvResult.observe(this) { message ->
+        viewModel.backupStatus.observe(this, Observer { message ->
             showToast(message)
-        }
-        viewModel.backupResult.observe(this) { message ->
-            showToast(message)
-        }
-        viewModel.restoreResult.observe(this) { message ->
-            showToast(message)
-        }
+        })
     }
 
     private fun setupListeners() {
@@ -146,7 +145,12 @@ class DefinicoesActivity : AppCompatActivity() {
         AlertDialog.Builder(this)
             .setTitle("Exportar Backup")
             .setMessage("Isso criará um backup do banco de dados em formato JSON. Deseja continuar?")
-            .setPositiveButton("Exportar") { _, _ -> viewModel.exportDatabase(uri) }
+            .setPositiveButton("Exportar") { _, _ ->
+                val fileDescriptor: FileDescriptor? = contentResolver.openFileDescriptor(uri, "w")?.fileDescriptor
+                fileDescriptor?.let {
+                    viewModel.performBackup(java.io.File(it.toString())) // Convertendo FileDescriptor para File
+                } ?: Toast.makeText(this, "Erro ao abrir arquivo para exportar.", Toast.LENGTH_SHORT).show()
+            }
             .setNegativeButton("Cancelar", null)
             .show()
     }
@@ -155,8 +159,12 @@ class DefinicoesActivity : AppCompatActivity() {
         AlertDialog.Builder(this)
             .setTitle("Importar Backup")
             .setMessage("Isso restaurará os dados do arquivo JSON selecionado. Dados existentes podem ser substituídos. Deseja continuar?")
-            .setPositiveButton("Importar") { _, _ -> viewModel.importarClientesDeCsv(uri) }
-            .setNegativeButton("Confirmar") { _, _ -> viewModel.importDatabase(uri) }
+            .setPositiveButton("Importar") { _, _ ->
+                val fileDescriptor: FileDescriptor? = contentResolver.openFileDescriptor(uri, "r")?.fileDescriptor
+                fileDescriptor?.let {
+                    viewModel.performRestore(java.io.File(it.toString())) // Convertendo FileDescriptor para File
+                } ?: Toast.makeText(this, "Erro ao abrir arquivo para importar.", Toast.LENGTH_SHORT).show()
+            }
             .setNegativeButton("Cancelar", null)
             .show()
     }

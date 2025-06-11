@@ -10,7 +10,7 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import com.example.myapplication.data.AppDatabase // Adicione esta linha
+import com.example.myapplication.data.AppDatabase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -39,25 +39,20 @@ class LoadingLoginActivity : AppCompatActivity() {
         val rotateAnimation: Animation = AnimationUtils.loadAnimation(this, R.anim.rotate_indefinitely)
         imageViewLogo.startAnimation(rotateAnimation)
 
-        startLoadingTasks()
+        startLoadingProcess()
     }
 
-    private fun startLoadingTasks() {
+    private fun startLoadingProcess() {
         uiScope.launch {
-            // Simular o carregamento de recursos
-            for (i in 0..100 step 10) {
-                progressBarHorizontal.progress = i
-                textViewPercentage.text = String.format(Locale.getDefault(), "%d%%", i)
-                delay(100L) // Pequeno delay para simular trabalho
-            }
+            progressBarHorizontal.progress = 10
+            textViewPercentage.text = "10%"
+            delay(300L)
 
-            // Inicialização do banco de dados Room
             var initializationFailed = false
             withContext(Dispatchers.IO) {
                 try {
+                    // Força a inicialização do banco de dados
                     Log.d("LoadingLogin", "Tentando inicializar o banco de dados...")
-                    // O Room fará as migrações automaticamente aqui, se necessário.
-                    // Certifique-se de que getDatabase é thread-safe.
                     AppDatabase.getDatabase(applicationContext).faturaDao().getAllFaturas()
                     Log.d("LoadingLogin", "Banco de dados inicializado com sucesso.")
                 } catch (e: Exception) {

@@ -5,33 +5,37 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
-import com.example.myapplication.data.AppDatabase // Adicione esta linha
+import androidx.lifecycle.asLiveData // Importar asLiveData
+import com.example.myapplication.data.AppDatabase
 import com.example.myapplication.data.model.Cliente
+import com.example.myapplication.data.model.ClienteBloqueado
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 class ClientesBloqueadosViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val _clientesBloqueados = MutableLiveData<List<Cliente>>()
-    val clientesBloqueados: LiveData<List<Cliente>> = _clientesBloqueados
+    private val clienteBloqueadoDao = AppDatabase.getDatabase(application).clienteBloqueadoDao()
+    private val clienteDao = AppDatabase.getDatabase(application).clienteDao()
 
-    private val db = AppDatabase.getDatabase(application) // Obtenha a instância do AppDatabase
+    val clientesBloqueados: LiveData<List<Cliente>> = clienteDao.getBloqueados().asLiveData() // Agora observa Clientes com bloqueado=true
 
-    init {
-        loadClientesBloqueados()
+    // Assumindo que `salvarAlteracoes` e `excluirPermanentemente` são para `ClienteBloqueado`
+    fun salvarAlteracoes(clienteBloqueado: ClienteBloqueado) = viewModelScope.launch(Dispatchers.IO) {
+        clienteBloqueadoDao.update(clienteBloqueado) // Certifique-se que ClienteBloqueadoDao tem update
     }
 
-    private fun loadClientesBloqueados() {
-        viewModelScope.launch {
-            db.clienteDao().getBloqueados().observeForever {
-                _clientesBloqueados.value = it
-            }
-        }
+    fun excluirPermanentemente(clienteBloqueado: ClienteBloqueado) = viewModelScope.launch(Dispatchers.IO) {
+        clienteBloqueadoDao.deleteById(clienteBloqueado.id)
     }
 
-    fun desbloquearCliente(cliente: Cliente) {
-        viewModelScope.launch {
-            val updatedCliente = cliente.copy(bloqueado = false)
-            db.clienteDao().update(updatedCliente)
-        }
+    // Método para desbloquear um cliente
+    fun desbloquearCliente(cliente: Cliente) = viewModelScope.launch(Dispatchers.IO) { // Parâmetro tipo Cliente
+        val clienteDesbloqueado = cliente.copy(bloqueado = false)
+        clienteDao.update(clienteDesbloqueado)
+    }
+
+    // Método para deletar um cliente (não bloqueado)
+    fun deleteCliente(cliente: Cliente) = viewModelScope.launch(Dispatchers.IO) {
+        clienteDao.deleteById(cliente.id)
     }
 }

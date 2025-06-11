@@ -17,6 +17,15 @@ interface FaturaDao {
     @Query("SELECT * FROM faturas ORDER BY id DESC")
     fun getAllFaturas(): Flow<List<Fatura>>
 
+    // Este método retorna uma lista direta, útil para operações que não precisam de LiveData ou Flow
+    @Query("SELECT * FROM faturas ORDER BY id DESC")
+    suspend fun getAllFaturasList(): List<Fatura>
+
+    // Este método retorna uma lista direta, útil para operações sem LiveData/Flow, com detalhes
+    @Transaction
+    @Query("SELECT * FROM faturas")
+    suspend fun getAllFaturasWithDetailsList(): List<FaturaWithDetails>
+
     @Query("SELECT * FROM faturas WHERE id = :faturaId")
     suspend fun getFaturaById(faturaId: Long): Fatura?
 
@@ -31,15 +40,15 @@ interface FaturaDao {
 
     @Query("""
         SELECT * FROM faturas
-        WHERE (:startDate IS NULL OR date(data) >= :startDate)
-        AND (:endDate IS NULL OR date(data) <= :endDate)
+        WHERE (:startDate IS NULL OR data BETWEEN :startDate AND :endDate)
+        AND (:endDate IS NULL OR data <= :endDate)
     """)
     fun getFaturasNoPeriodo(startDate: String?, endDate: String?): Flow<List<Fatura>>
 
     @Query("""
         SELECT cliente AS nomeCliente, SUM(saldo_devedor) as totalGasto, MIN(id) as clienteId
         FROM faturas
-        WHERE cliente IS NOT NULL AND (:startDate IS NULL OR date(data) >= :startDate) AND (:endDate IS NULL OR date(data) <= :endDate)
+        WHERE cliente IS NOT NULL AND (:startDate IS NULL OR data BETWEEN :startDate AND :endDate) AND (:endDate IS NULL OR data <= :endDate)
         GROUP BY cliente
         ORDER BY totalGasto DESC
     """)
@@ -54,7 +63,10 @@ interface FaturaDao {
     suspend fun insertFaturaItem(item: FaturaItem)
 
     @Query("DELETE FROM fatura_itens WHERE fatura_id = :faturaId")
-    suspend fun deleteItensByFaturaId(faturaId: Long)
+    suspend fun deleteFaturaItemsByFaturaId(faturaId: Long)
+
+    @Query("SELECT * FROM fatura_itens WHERE fatura_id = :faturaId")
+    suspend fun getFaturaItemsByFaturaIdList(faturaId: Long): List<FaturaItem> // Adicionado para ResumoFinanceiroViewModel
 
     // FOTOS DA FATURA
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -65,4 +77,18 @@ interface FaturaDao {
 
     @Query("DELETE FROM fatura_fotos WHERE fatura_id = :faturaId")
     suspend fun deleteFotosByFaturaId(faturaId: Long)
+
+    // Método para inserir uma fatura com seus itens
+    @Transaction
+    suspend fun insertFaturaWithItems(fatura: Fatura, items: List<FaturaItem>) {
+        val faturaId = insertFatura(fatura)
+        items.forEach { item ->
+            insertFaturaItem(item.copy(fatura_id = faturaId))
+        }
+    }
+
+    // Método para obter faturas por data
+    // Assumindo que a coluna 'data' em Fatura é TEXT (YYYY-MM-DD HH:MM:SS)
+    @Query("SELECT * FROM faturas WHERE data BETWEEN :startDate AND :endDate")
+    fun getFaturasByDateRange(startDate: String, endDate: String): Flow<List<FaturaWithDetails>>
 }

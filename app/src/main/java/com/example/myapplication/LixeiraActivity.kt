@@ -12,25 +12,23 @@ import androidx.lifecycle.Observer
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.myapplication.data.AppDatabase
-import com.example.myapplication.data.model.FaturaLixeira
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import com.example.myapplication.data.model.FaturaLixeira // Corrigido o import
+import com.example.myapplication.R // Importar R para acessar recursos
 
 class LixeiraActivity : AppCompatActivity() {
 
     private lateinit var spinnerFiltroMes: Spinner
     private lateinit var recyclerViewLixeira: RecyclerView
     private lateinit var faturaLixeiraAdapter: FaturaLixeiraAdapter
-    private val viewModel: LixeiraViewModel by viewModels() // Use by viewModels()
+    private val viewModel: LixeiraViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_lixeira)
+        setContentView(R.layout.activity_lixeira) // Assumindo o layout correto
 
-        spinnerFiltroMes = findViewById(R.id.spinnerFiltroMes)
-        recyclerViewLixeira = findViewById(R.id.recyclerViewLixeira)
+        // Inicialize as Views
+        spinnerFiltroMes = findViewById(R.id.spinnerFiltroMes) // Verifique se o ID existe
+        recyclerViewLixeira = findViewById(R.id.faturasLixeiraRecyclerView) // Verifique se o ID existe
 
         setupSpinner()
         setupRecyclerView()
@@ -46,7 +44,7 @@ class LixeiraActivity : AppCompatActivity() {
         spinnerFiltroMes.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>, view: View?, position: Int, id: Long) {
                 val selectedMonth = position + 1 // Mês é 1-based (Janeiro = 1)
-                val selectedYear = 2024 // Ou obtenha dinamicamente o ano atual se necessário
+                val selectedYear = 2025 // Ou obtenha dinamicamente o ano atual se necessário
                 viewModel.filterFaturasLixeiraByMonth(selectedMonth, selectedYear)
             }
 
@@ -57,10 +55,24 @@ class LixeiraActivity : AppCompatActivity() {
     }
 
     private fun setupRecyclerView() {
-        faturaLixeiraAdapter = FaturaLixeiraAdapter(mutableListOf()) { faturaLixeira ->
-            // Handle click on item
-            Toast.makeText(this, "Item da lixeira clicado: ${faturaLixeira.id}", Toast.LENGTH_SHORT).show()
-        }
+        faturaLixeiraAdapter = FaturaLixeiraAdapter(
+            onRestoreClick = { faturaLixeira ->
+                viewModel.restoreFaturaLixeira(faturaLixeira)
+                Toast.makeText(this, "Fatura restaurada!", Toast.LENGTH_SHORT).show()
+                setResult(RESULT_OK) // Para informar a tela anterior que algo foi restaurado
+            },
+            onLongClick = { faturaLixeira ->
+                AlertDialog.Builder(this)
+                    .setTitle("Excluir Permanentemente")
+                    .setMessage("Esta ação não pode ser desfeita. Deseja excluir esta fatura para sempre?")
+                    .setPositiveButton("Excluir") { _, _ ->
+                        viewModel.deleteFaturaLixeira(faturaLixeira)
+                        Toast.makeText(this, "Fatura excluída permanentemente.", Toast.LENGTH_SHORT).show()
+                    }
+                    .setNegativeButton("Cancelar", null)
+                    .show()
+            }
+        )
         recyclerViewLixeira.layoutManager = LinearLayoutManager(this)
         recyclerViewLixeira.adapter = faturaLixeiraAdapter
     }
@@ -68,7 +80,7 @@ class LixeiraActivity : AppCompatActivity() {
     private fun observeViewModel() {
         viewModel.faturasLixeira.observe(this, Observer { faturas ->
             faturas?.let {
-                faturaLixeiraAdapter.updateData(it)
+                faturaLixeiraAdapter.updateFaturas(it) // Corrigido para updateFaturas
             }
         })
     }

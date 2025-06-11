@@ -1,39 +1,29 @@
 package com.example.myapplication
 
+import android.app.Application // Importar Application
+import androidx.lifecycle.AndroidViewModel // Mudar para AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.myapplication.data.AppDatabase // Adicione esta linha
+import androidx.lifecycle.asLiveData // Importar asLiveData
+import com.example.myapplication.data.AppDatabase
 import com.example.myapplication.data.model.Artigo
 import kotlinx.coroutines.launch
 
-class ArquivosRecentesViewModel : ViewModel() {
+// Estender AndroidViewModel e receber Application no construtor
+class ArquivosRecentesViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val _artigosRecentes = MutableLiveData<List<Artigo>>()
-    val artigosRecentes: LiveData<List<Artigo>> = _artigosRecentes
+    private val artigoDao = AppDatabase.getDatabase(application).artigoDao()
 
-    init {
-        // Inicialize o banco de dados e observe os artigos
-        // Certifique-se que o contexto é obtido de forma segura se necessário.
-        // Normalmente o AppDatabase é inicializado uma vez na Application class
-        // ou no primeiro acesso, e depois reutilizado.
-        // Para fins de exemplo, vamos assumir que getDatabase() é chamado no contexto da aplicação
-        // ou que a injeção de dependência fornece a instância.
-        // Se este ViewModel precisa de um Context, ele deve estender AndroidViewModel
-        // e receber o application context no construtor.
-        // Por enquanto, assumimos que AppDatabase.getDatabase(context) já está acessível.
-        // Se getDatabase exige um Context, e este não é um AndroidViewModel,
-        // você precisará ajustar a arquitetura para fornecer o Context.
-        AppDatabase.getDatabase(MyApplication.applicationContext()).artigoDao().getAllArtigos().observeForever {
-            _artigosRecentes.value = it
-        }
-    }
+    // Expõe a lista de artigos recentes como LiveData para a UI observar
+    val artigosRecentes: LiveData<List<Artigo>> = artigoDao.getArtigosRecentes().asLiveData()
 
-    override fun onCleared() {
-        super.onCleared()
-        // Remova o observer se ele foi adicionado com observeForever
-        // Se usar LiveData.observe(lifecycleOwner, observer), não é necessário remover manualmente
-        // (_artigosRecentes.removeObserver { /* observer reference */ })
-    }
+    // O ArtigoViewModel que eu te dei também tem o "todosArtigos" que é ArtigoDao.getAll().asLiveData()
+    // Se você precisa buscar todos os artigos aqui, use:
+    // val todosArtigos: LiveData<List<Artigo>> = artigoDao.getAll().asLiveData()
+
+    // Removi o init e observeForever aqui, pois o asLiveData já faz isso de forma reativa.
+    // Se você precisar de lógica de inicialização adicional, pode adicioná-la.
+
+    // Removido o método 'onCleared' pois 'asLiveData' trata do ciclo de vida.
 }

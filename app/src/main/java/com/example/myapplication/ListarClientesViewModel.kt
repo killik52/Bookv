@@ -1,47 +1,43 @@
 package com.example.myapplication
 
 import android.app.Application
-import androidx.lifecycle.AndroidViewModel
-import androidx.lifecycle.LiveData
-import androidx.lifecycle.MutableLiveData
-import androidx.lifecycle.viewModelScope
-import com.example.myapplication.data.AppDatabase // Adicione esta linha
+import androidx.lifecycle.*
+import com.example.myapplication.data.AppDatabase
+import com.example.myapplication.data.ClienteRepository
 import com.example.myapplication.data.model.Cliente
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class ListarClientesViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val _clientes = MutableLiveData<List<Cliente>>()
-    val clientes: LiveData<List<Cliente>> = _clientes
+    private val clienteDao = AppDatabase.getDatabase(application).clienteDao()
+    private val repository = ClienteRepository(clienteDao)
 
-    private val db = AppDatabase.getDatabase(application) // Obtenha a instância do AppDatabase
+    private val searchQuery = MutableStateFlow("")
 
+    // LiveData que reage às mudanças no termo de busca e filtra os clientes
+    val clientes: LiveData<List<Cliente>> = searchQuery.flatMapLatest { query ->
+        if (query.isBlank()) {
+            clienteDao.getAll() // getAll retorna Flow<List<Cliente>>
+        } else {
+            clienteDao.searchClientes("%$query%") // searchClientes também retorna Flow<List<Cliente>>
+        }
+    }.asLiveData() // Converte o Flow para LiveData
+
+    // `loadClientes()` já não é necessário, pois `clientes` já está a ser observado reativamente.
     init {
-        loadClientes()
+        // Nada a fazer aqui se `clientes` já é reativo
     }
 
-    fun loadClientes() {
-        viewModelScope.launch {
-            // Observa alterações no banco de dados e atualiza a LiveData
-            db.clienteDao().getAll().observeForever {
-                _clientes.value = it
-            }
-        }
+    // Função para ser chamada pela UI para atualizar a busca
+    fun buscarClientes(query: String) {
+        searchQuery.value = query
     }
 
-    // Corrigido para usar os nomes corretos das propriedades de Cliente e para inferência de tipo
-    fun searchClientes(query: String): LiveData<List<Cliente>> {
-        val searchResult = MutableLiveData<List<Cliente>>()
-        viewModelScope.launch {
-            val filteredList = db.clienteDao().getAllClientesList().filter { cliente -> // Explicitamente nomear o parâmetro 'cliente'
-                val nomeMatches = cliente.nome?.contains(query, ignoreCase = true) ?: false
-                val emailMatches = cliente.email?.contains(query, ignoreCase = true) ?: false
-                val telefoneMatches = cliente.telefone?.contains(query, ignoreCase = true) ?: false
-                val cnpjMatches = cliente.cnpj?.contains(query, ignoreCase = true) ?: false
-                nomeMatches || emailMatches || telefoneMatches || cnpjMatches
-            }
-            searchResult.postValue(filteredList)
-        }
-        return searchResult
+    fun deletarCliente(cliente: Cliente) = viewModelScope.launch {
+        repository.deletarPorId(cliente.id)
     }
 }

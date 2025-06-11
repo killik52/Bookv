@@ -11,6 +11,7 @@ import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.widget.addTextChangedListener
 import com.example.myapplication.data.model.Cliente
+import com.example.myapplication.ListarClientesViewModel // Certifique-se de que esta importação está correta
 
 class AdicionarClienteActivity : AppCompatActivity() {
 
@@ -30,9 +31,7 @@ class AdicionarClienteActivity : AppCompatActivity() {
         // Inicializa as Views
         listViewClientesRecentes = findViewById(R.id.listViewClientesRecentes)
         editTextPesquisa = findViewById(R.id.editTextPesquisa)
-        // O ID no seu XML é textViewNovoartigo, o que parece um erro de digitação no XML.
-        // Se o app crashar aqui, renomeie o ID no XML para textViewNovoCliente.
-        textViewNovoCliente = findViewById(R.id.textViewNovoCliente) // Corrected line
+        textViewNovoCliente = findViewById(R.id.textViewNovoCliente)
 
         // Configura o Adapter
         adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, mutableListOf<String>())
@@ -75,7 +74,13 @@ class AdicionarClienteActivity : AppCompatActivity() {
 
         // Listener para a barra de pesquisa
         editTextPesquisa.addTextChangedListener { text ->
-            viewModel.buscarClientes(text.toString())
+            viewModel.searchClientes(text.toString()).observe(this) { filteredClientes ->
+                listaDeClientesAtual = filteredClientes
+                val nomes = filteredClientes.mapNotNull { it.nome }
+                adapter.clear()
+                adapter.addAll(nomes)
+                adapter.notifyDataSetChanged()
+            }
         }
     }
 

@@ -64,12 +64,12 @@ class SecondScreenActivity : AppCompatActivity() {
             val descricao = data?.getStringExtra("descricao")
 
             if (artigoId != -1 && nomeArtigo != null && quantidade != null && valor != null) {
-                val currentClienteId = viewModel.selectedCliente.value?.id ?: 0
+                val currentClienteId = viewModel.selectedCliente.value?.id ?: 0L // ClienteId agora é Long
 
                 val newItem = FaturaItem(
                     id = 0,
-                    fatura_id = viewModel.currentFaturaId.value ?: 0,
-                    artigo_id = artigoId,
+                    fatura_id = viewModel.currentFaturaId.value ?: 0L, // fatura_id agora é Long
+                    artigo_id = artigoId.toLong(), // Convertendo Int para Long
                     cliente_id = currentClienteId,
                     quantidade = quantidade,
                     preco = valor / quantidade
@@ -113,8 +113,8 @@ class SecondScreenActivity : AppCompatActivity() {
         setupListeners()
         observeViewModel()
 
-        val faturaId = intent.getIntExtra("fatura_id", -1)
-        if (faturaId != -1) {
+        val faturaId = intent.getLongExtra("fatura_id", -1L) // faturaId agora é Long
+        if (faturaId != -1L) {
             viewModel.loadFatura(faturaId)
         } else {
             val currentDate = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date())
@@ -141,7 +141,7 @@ class SecondScreenActivity : AppCompatActivity() {
         val clientesAdapter = ArrayAdapter<String>(this, android.R.layout.simple_dropdown_item_1line)
         editTextCliente.setAdapter(clientesAdapter)
 
-        viewModel.clientes.observe(this, Observer { clientes -> // Use Observer explícito
+        viewModel.clientes.observe(this, Observer { clientes ->
             clientes?.let {
                 clientesAdapter.clear()
                 clientesAdapter.addAll(it.map { cliente -> cliente.nome })
@@ -184,7 +184,7 @@ class SecondScreenActivity : AppCompatActivity() {
 
         imageViewAddNote.setOnClickListener {
             val faturaId = viewModel.currentFaturaId.value
-            if (faturaId != null && faturaId != 0) {
+            if (faturaId != null && faturaId != 0L) { // faturaId agora é Long
                 showAddNoteDialog(faturaId)
             } else {
                 Toast.makeText(this, "Salve a fatura primeiro para adicionar notas.", Toast.LENGTH_SHORT).show()
@@ -193,7 +193,7 @@ class SecondScreenActivity : AppCompatActivity() {
     }
 
     private fun observeViewModel() {
-        viewModel.faturaWithDetails.observe(this, Observer { faturaWithDetails -> // Use Observer explícito
+        viewModel.faturaWithDetails.observe(this, Observer { faturaWithDetails ->
             faturaWithDetails?.let {
                 textViewIdFatura.text = "Fatura ID: ${it.fatura.id}"
                 editTextCliente.setText(it.cliente?.nome, false)
@@ -244,13 +244,22 @@ class SecondScreenActivity : AppCompatActivity() {
         }
 
         val fatura = Fatura(
-            id = viewModel.currentFaturaId.value ?: 0,
+            id = viewModel.currentFaturaId.value ?: 0L, // ID de fatura é Long
+            numeroFatura = "", // Adicionar o número da fatura, se aplicável
+            cliente = clienteSelecionado.nome, // Nome do cliente
             clienteId = clienteSelecionado.id,
-            dataEmissao = dataEmissao,
+            dataEmissao = dataEmissao, // dataEmissao é Long (timestamp)
             valorTotal = valorTotal,
             status = status,
             caminhoArquivo = null,
-            tipo = "Normal"
+            tipo = "Normal",
+            subtotal = valorTotal, // Subtotal e valorTotal podem ser iguais se não houver desconto/taxa
+            desconto = 0.0,
+            descontoPercent = 0.0,
+            taxaEntrega = 0.0,
+            saldoDevedor = valorTotal, // Saldo devedor inicial é o total
+            data = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date(dataEmissao)), // Formato de String
+            foiEnviada = 0 // Default para não enviada
         )
 
         val faturaItems = faturaItemAdapter.items.map { it.copy(fatura_id = fatura.id) }
@@ -261,7 +270,7 @@ class SecondScreenActivity : AppCompatActivity() {
         finish()
     }
 
-    private fun showAddNoteDialog(faturaId: Int) {
+    private fun showAddNoteDialog(faturaId: Long) { // faturaId é Long
         val dialogView = layoutInflater.inflate(R.layout.dialog_add_nota, null)
         val editTextNoteContent: EditText = dialogView.findViewById(R.id.editTextNoteContent)
         val buttonSaveNote: Button = dialogView.findViewById(R.id.buttonSaveNote)

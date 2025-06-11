@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.widget.ArrayAdapter
 import android.widget.ListView
+import android.widget.Toast // Importe Toast
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import com.example.myapplication.data.model.Artigo
@@ -12,7 +13,6 @@ import com.example.myapplication.data.model.Artigo
 class ListarArtigosActivity : AppCompatActivity() {
 
     private lateinit var listViewArtigos: ListView
-    // Usa o ViewModel para acessar os dados do Room
     private val viewModel: ArtigoViewModel by viewModels()
 
     private var artigosList: List<Artigo> = listOf()
@@ -34,14 +34,11 @@ class ListarArtigosActivity : AppCompatActivity() {
         listViewArtigos.setOnItemClickListener { _, _, position, _ ->
             val artigoSelecionado = artigosList.getOrNull(position)
             artigoSelecionado?.let { artigo ->
-                // Retorna os dados do artigo para a tela anterior
                 val resultIntent = Intent().apply {
                     putExtra("artigo_id", artigo.id)
                     putExtra("nome_artigo", artigo.nome)
-                    // Usa a quantidade do artigo, ou 1 como padrão
                     val quantidade = artigo.quantidade ?: 1
                     putExtra("quantidade", quantidade)
-                    // Calcula o preço total baseado na quantidade
                     val precoUnitario = artigo.preco ?: 0.0
                     putExtra("valor", precoUnitario * quantidade)
                     putExtra("numero_serial", artigo.numeroSerial)
@@ -49,13 +46,11 @@ class ListarArtigosActivity : AppCompatActivity() {
                 }
                 setResult(Activity.RESULT_OK, resultIntent)
                 finish()
-            }
+            } ?: Toast.makeText(this, "Artigo não encontrado", Toast.LENGTH_SHORT).show()
         }
     }
 
     private fun observeArtigos() {
-        // Observa as mudanças na lista de artigos do ViewModel
-        // Este código agora funcionará, pois 'todosArtigos' existe.
         viewModel.todosArtigos.observe(this) { artigos ->
             artigos?.let {
                 this.artigosList = it
@@ -63,7 +58,7 @@ class ListarArtigosActivity : AppCompatActivity() {
                 listAdapter.clear()
                 listAdapter.addAll(nomes)
                 listAdapter.notifyDataSetChanged()
-            }
+            } ?: Toast.makeText(this, "Nenhum artigo encontrado.", Toast.LENGTH_SHORT).show()
         }
     }
 }

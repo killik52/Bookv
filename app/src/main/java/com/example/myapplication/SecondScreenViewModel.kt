@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.asLiveData // Importar asLiveData
 import com.example.myapplication.data.AppDatabase
 import com.example.myapplication.data.model.Artigo
 import com.example.myapplication.data.model.Cliente
@@ -26,7 +27,7 @@ class SecondScreenViewModel(application: Application) : AndroidViewModel(applica
     private val _clientes = MutableLiveData<List<Cliente>>()
     val clientes: LiveData<List<Cliente>> = _clientes
 
-    val currentFaturaId = MutableLiveData<Int>()
+    val currentFaturaId = MutableLiveData<Long>() // faturaId é Long
     val selectedCliente = MutableLiveData<Cliente?>()
 
     init {
@@ -35,33 +36,37 @@ class SecondScreenViewModel(application: Application) : AndroidViewModel(applica
 
     private fun loadClientes() {
         viewModelScope.launch {
-            db.clienteDao().getAll().observeForever {
+            db.clienteDao().getAll().collect { // Usar collect para Flow
                 _clientes.value = it
             }
         }
     }
 
-    fun loadFatura(faturaId: Int) {
+    fun loadFatura(faturaId: Long) { // faturaId é Long
         viewModelScope.launch {
-            db.faturaDao().getFaturaWithDetails(faturaId).observeForever {
-                _faturaWithDetails.value = it
-                currentFaturaId.value = it?.fatura?.id
-                selectedCliente.value = it?.cliente
+            db.faturaDao().getFaturaWithDetails(faturaId)?.let { // getFaturaWithDetails agora é suspend fun
+                _faturaWithDetails.postValue(it)
+                currentFaturaId.postValue(it.fatura.id)
+                selectedCliente.postValue(it.cliente)
+            } ?: run {
+                _faturaWithDetails.postValue(null)
+                currentFaturaId.postValue(0L)
+                selectedCliente.postValue(null)
             }
         }
     }
 
     fun saveFaturaWithItems(fatura: Fatura, items: List<FaturaItem>) {
         viewModelScope.launch {
-            if (fatura.id == 0) {
-                val newFaturaId = db.faturaDao().insert(fatura)
+            if (fatura.id == 0L) { // ID de fatura é Long
+                val newFaturaId = db.faturaDao().insertFatura(fatura) // insertFatura retorna Long
                 items.forEach { item ->
-                    db.faturaDao().insertFaturaItem(item.copy(fatura_id = newFaturaId.toInt()))
+                    db.faturaDao().insertFaturaItem(item.copy(fatura_id = newFaturaId)) // fatura_id é Long
                 }
-                currentFaturaId.value = newFaturaId.toInt()
+                currentFaturaId.postValue(newFaturaId)
             } else {
-                db.faturaDao().update(fatura)
-                db.faturaDao().deleteFaturaItemsByFaturaId(fatura.id)
+                db.faturaDao().updateFatura(fatura) // updateFatura
+                db.faturaDao().deleteItensByFaturaId(fatura.id) // deleteItensByFaturaId
                 items.forEach { item ->
                     db.faturaDao().insertFaturaItem(item.copy(fatura_id = fatura.id))
                 }
@@ -69,11 +74,11 @@ class SecondScreenViewModel(application: Application) : AndroidViewModel(applica
         }
     }
 
-    fun addNoteToFatura(faturaId: Int, content: String) {
+    fun addNoteToFatura(faturaId: Long, content: String) { // faturaId é Long
         viewModelScope.launch {
             val newNote = FaturaNota(
-                id = 0,
-                faturaRelacionadaId = faturaId,
+                id = 0, // Auto-gerado
+                faturaRelacionadaId = faturaId, // faturaRelacionadaId é Long
                 conteudo = content,
                 dataCriacao = System.currentTimeMillis()
             )
@@ -81,15 +86,17 @@ class SecondScreenViewModel(application: Application) : AndroidViewModel(applica
         }
     }
 
-    fun getNotesForFatura(faturaId: Int): LiveData<List<FaturaNota>> {
-        return db.faturaNotaDao().getNotesForFatura(faturaId)
+    fun getNotesForFatura(faturaId: Long): LiveData<List<FaturaNota>> { // faturaId é Long
+        return db.faturaNotaDao().getNotesForFatura(faturaId).asLiveData() // getNotesForFatura retorna Flow
     }
 
-    fun getArtigoById(artigoId: Int): LiveData<Artigo?> {
-        return db.artigoDao().getArtigoById(artigoId)
+    fun getArtigoById(artigoId: Int): LiveData<Artigo?> { // artigoId é Int aqui, mas Long no DAO
+        return liveData {
+            emit(db.artigoDao().getArtigoById(artigoId.toLong())) // Converte Int para Long
+        }
     }
 
     fun getAllArtigos(): LiveData<List<Artigo>> {
-        return db.artigoDao().getAllArtigos()
+        return db.artigoDao().getAllArtigos().asLiveData()
     }
 }

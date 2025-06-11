@@ -1,7 +1,8 @@
 package data
 
 import android.content.Context
-import com.example.myapplication.data.AppDatabase // Adicione esta linha
+import com.example.myapplication.data.AppDatabase
+import com.example.myapplication.data.model.* // Importar todas as classes de modelo
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import java.io.File
@@ -17,6 +18,7 @@ class DatabaseBackup(private val db: AppDatabase) {
         val allData = mutableMapOf<String, Any>()
 
         // Adaptações para Listas para GSON
+        // Chamar os métodos DAO para obter as listas diretamente
         val clientes = db.clienteDao().getAllClientesList()
         val artigos = db.artigoDao().getAllArtigosList()
         val faturas = db.faturaDao().getAllFaturasWithDetailsList()
@@ -59,8 +61,8 @@ class DatabaseBackup(private val db: AppDatabase) {
             // IMPORTANTE: A ordem de restauração é crucial devido às chaves estrangeiras.
             // Faturas devem ser restauradas antes de faturaItems e faturaNotas.
             (allData["faturas"] as? List<Map<String, Any>>)?.forEach { faturaMap ->
-                val fatura = gson.fromJson(gson.toJson(furaMap), Fatura::class.java)
-                db.faturaDao().insert(fatura)
+                val fatura = gson.fromJson(gson.toJson(faturaMap), Fatura::class.java) // Corrigido 'furaMap' para 'faturaMap'
+                db.faturaDao().insertFatura(fatura) // Chamar insertFatura
             }
 
             // Restaurar itens da fatura

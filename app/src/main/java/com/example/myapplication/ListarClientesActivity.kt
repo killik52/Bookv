@@ -7,7 +7,7 @@ import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SearchView
 import androidx.recyclerview.widget.LinearLayoutManager
-import com.example.myapplication.databinding.ActivityListarClientesBinding
+import com.example.myapplication.databinding.ActivityListarClientesBinding // Verifique este import
 
 class ListarClientesActivity : AppCompatActivity() {
 
@@ -27,10 +27,8 @@ class ListarClientesActivity : AppCompatActivity() {
     }
 
     private fun setupRecyclerView() {
-        // CORRIGIDO: Fornecendo as duas ações esperadas pelo adapter
         clienteAdapter = ClienteAdapter(
             onItemClick = { cliente ->
-                // Ação para clique normal: retorna o cliente para a tela anterior
                 val resultIntent = Intent().apply {
                     putExtra("cliente_id", cliente.id)
                     putExtra("nome_cliente", cliente.nome)
@@ -39,7 +37,6 @@ class ListarClientesActivity : AppCompatActivity() {
                 finish()
             },
             onEditClick = { cliente ->
-                // Ação para clique no botão de editar: abre a tela de detalhes do cliente
                 val intent = Intent(this, ClienteActivity::class.java).apply {
                     putExtra("id", cliente.id)
                 }
@@ -69,8 +66,8 @@ class ListarClientesActivity : AppCompatActivity() {
         searchView.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
             override fun onQueryTextSubmit(query: String?): Boolean = false
 
-            override fun onQueryTextChange(newText: String?): Boolean {
-                viewModel.buscarClientes(newText.orEmpty())
+            override fun onOnQueryTextChange(newText: String?): Boolean {
+                viewModel.buscarClientes(newText.orEmpty()) // Corrigido para buscarClientes
                 return true
             }
         })
